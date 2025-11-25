@@ -10,6 +10,7 @@ from app.db.models import User
 from app.schemas.user import UserCreate, UserLogin, Token, UserBase
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password, create_access_token
+from app.api import deps
 
 router = APIRouter()
 
@@ -73,3 +74,10 @@ def login_for_access_token(
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=UserBase)
+def read_users_me(current_user: User = Depends(deps.get_current_user)):
+    """
+    Lấy thông tin người dùng hiện tại.
+    """
+    return current_user

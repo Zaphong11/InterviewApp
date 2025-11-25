@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 # Define Pydantic models for extraction
 class Criteria(BaseModel):
     keyword: str = Field(description="Keyword to look for in the answer")
-    points: float = Field(description="Points awarded for this keyword")
+    score: float = Field(description="Score awarded for this keyword")
 
 class Question(BaseModel):
     question_text: str = Field(description="The text of the interview question")

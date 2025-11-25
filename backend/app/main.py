@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, jobs
+from app.api.endpoints import auth, jobs, interviews
 from app.db.models import Base
 from app.db.session import engine
 from app.db.models import User
@@ -19,7 +19,8 @@ app = FastAPI(
 # --- CẤU HÌNH CORS ---
 # Thêm middleware để cho phép frontend (chạy ở port 3000) gọi API
 origins = [
-    "http://localhost:3000", # Địa chỉ của frontend Next.js
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
 ]
 
 app.add_middleware(
@@ -33,6 +34,7 @@ app.add_middleware(
 # Thêm Router cho Authentication
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
+app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["Interviews"])
 
 # --- Ví dụ về Endpoint được bảo vệ bằng Phân quyền ---
 from fastapi import Depends, APIRouter

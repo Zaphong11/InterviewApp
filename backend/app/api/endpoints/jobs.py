@@ -4,9 +4,50 @@ from app.db.session import get_db
 from app.db.models import Job, User, Role
 from app.services.pdf_service import parse_interview_pdf
 from app.api.deps import get_current_user
-from typing import Any
+from typing import Any, List
+
+from app.schemas import job as job_schema
+from app.api import deps
 
 router = APIRouter()
+
+@router.post("/", response_model=job_schema.Job)
+def create_job(
+    job_in: job_schema.JobCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowBusiness)
+):
+    """
+    Tạo Job mới.
+    Chỉ Business mới được tạo.
+    """
+    job = Job(
+        **job_in.dict(),
+        recruiter_id=current_user.id
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+@router.get("/", response_model=List[job_schema.Job])
+def read_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = 0,
+    limit: int = 100
+):
+    """
+    Retrieve jobs.
+    If user is business/recruiter, return only their jobs.
+    Otherwise, return all jobs.
+    """
+    if current_user.role == Role.BUSINESS:
+        jobs = db.query(Job).filter(Job.recruiter_id == current_user.id).offset(skip).limit(limit).all()
+    else:
+        jobs = db.query(Job).offset(skip).limit(limit).all()
+    return jobs
+
 
 @router.post("/{job_id}/upload-script", response_model=Any)
 async def upload_interview_script(
@@ -58,3 +99,4 @@ async def upload_interview_script(
     db.refresh(job)
 
     return job.questions_template
+

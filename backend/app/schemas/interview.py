@@ -13,8 +13,25 @@ class Question(BaseModel):
     user_answer: Optional[str] = None
     ai_grade: Optional[float] = None
 
+class QuestionCandidate(BaseModel):
+    question_text: str
+    user_answer: Optional[str] = None
+    # Exclude criteria and ai_grade for candidate view initially or maybe just criteria
+
 class InterviewContent(BaseModel):
     questions: List[Question]
+
+class InterviewContentCandidate(BaseModel):
+    questions: List[QuestionCandidate]
+
+class SubmitAnswerRequest(BaseModel):
+    question_id: int # Index of the question in the list
+    answer_text: str
+
+class SubmitAnswerResponse(BaseModel):
+    score: float
+    feedback: str
+    next_question_id: Optional[int] = None
 
 # --- Interview Schemas ---
 class InterviewBase(BaseModel):
@@ -37,5 +54,14 @@ class Interview(InterviewBase):
     total_score: Optional[float] = None
     ai_feedback: Optional[str] = None
 
+    class Config:
+        from_attributes = True
+
+class InterviewCandidateView(BaseModel):
+    id: int
+    job_id: int
+    status: InterviewStatus
+    content: InterviewContentCandidate
+    
     class Config:
         from_attributes = True
