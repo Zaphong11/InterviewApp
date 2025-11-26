@@ -71,7 +71,7 @@ export default function Login() {
                 if (role === 'business') {
                     navigate('/dashboard');
                 } else if (role === 'candidate') {
-                    navigate('/my-interviews');
+                    navigate('/candidate-dashboard');
                 } else if (role === 'admin') {
                     navigate('/admin');
                 } else {

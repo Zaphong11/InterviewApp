@@ -104,5 +104,20 @@ def verify_interview_flow():
     else:
         print("SUCCESS: Criteria hidden from candidate.")
 
+    # 6. Verify Get or Create Logic
+    print("Verifying Get or Create logic...")
+    resp = requests.post(f"{BASE_URL}/interviews/start", json={"job_id": job_id}, headers=candidate_headers)
+    if resp.status_code != 200:
+        print(f"Start Interview (2nd time) failed: {resp.text}")
+        return
+    
+    interview_2 = resp.json()
+    interview_id_2 = interview_2["id"]
+    
+    if interview_id == interview_id_2:
+        print(f"SUCCESS: Get or Create logic working. Interview ID {interview_id} == {interview_id_2}")
+    else:
+        print(f"FAIL: New interview created! {interview_id} != {interview_id_2}")
+
 if __name__ == "__main__":
     verify_interview_flow()

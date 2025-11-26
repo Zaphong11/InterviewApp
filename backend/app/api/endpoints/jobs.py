@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.db.session import get_db
-from app.db.models import Job, User, Role
+from app.db.models import Job, User, Role, Interview
 from app.services.pdf_service import parse_interview_pdf
 from app.api.deps import get_current_user
 from typing import Any, List
@@ -13,7 +14,7 @@ router = APIRouter()
 
 @router.post("/", response_model=job_schema.Job)
 def create_job(
-    job_in: job_schema.JobCreate,
+    job_in: job_schema.JobUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.AllowBusiness)
 ):
@@ -42,11 +43,25 @@ def read_jobs(
     If user is business/recruiter, return only their jobs.
     Otherwise, return all jobs.
     """
+    query = db.query(
+        Job,
+        func.count(Interview.id).label("candidate_count")
+    ).outerjoin(Interview, Job.id == Interview.job_id)
+
     if current_user.role == Role.BUSINESS:
-        jobs = db.query(Job).filter(Job.recruiter_id == current_user.id).offset(skip).limit(limit).all()
-    else:
-        jobs = db.query(Job).offset(skip).limit(limit).all()
-    return jobs
+        query = query.filter(Job.recruiter_id == current_user.id)
+
+    results = query.group_by(Job.id).offset(skip).limit(limit).all()
+
+    # Map results to Job schema with candidate_count
+    jobs_with_count = []
+    for job, count in results:
+        # Create a dict from job object and add candidate_count
+        job_data = job.__dict__
+        job_data["candidate_count"] = count
+        jobs_with_count.append(job_data)
+
+    return jobs_with_count
 
 
 @router.post("/{job_id}/upload-script", response_model=Any)
@@ -100,3 +115,91 @@ async def upload_interview_script(
 
     return job.questions_template
 
+
+@router.get("/{job_id}/candidates", response_model=List[job_schema.JobCandidate])
+def get_job_candidates(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowBusiness)
+):
+    """
+    Lấy danh sách ứng viên của một Job.
+    Chỉ Recruiter tạo ra Job này mới được xem.
+    """
+    # 1. Check Job existence
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # 2. Check permission
+    if job.recruiter_id != current_user.id and current_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized to view candidates for this job")
+
+    # 3. Query Interviews
+    # Join with User to get candidate info
+    results = db.query(Interview, User).join(User, Interview.candidate_id == User.id).filter(Interview.job_id == job_id).all()
+
+    candidates_data = []
+    for interview, candidate in results:
+        candidates_data.append({
+            "interview_id": interview.id,
+            "candidate_name": candidate.full_name,
+            "candidate_email": candidate.email,
+            "status": interview.status,
+            "total_score": interview.total_score,
+            "created_at": interview.created_at
+        })
+
+    return candidates_data
+
+
+@router.put("/{job_id}", response_model=job_schema.Job)
+def update_job(
+    job_id: int,
+    job_in: job_schema.JobUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowBusiness)
+):
+    """
+    Update a job.
+    Only the recruiter who created the job can update it.
+    """
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.recruiter_id != current_user.id and current_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized to update this job")
+
+    update_data = job_in.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(job, field, value)
+
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowBusiness)
+):
+    """
+    Delete a job.
+    Only the recruiter who created the job can delete it.
+    """
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.recruiter_id != current_user.id and current_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this job")
+
+    # Manually delete related interviews to ensure clean deletion
+    db.query(Interview).filter(Interview.job_id == job_id).delete()
+
+    db.delete(job)
+    db.commit()
+    return None

@@ -29,9 +29,12 @@ class SubmitAnswerRequest(BaseModel):
     answer_text: str
 
 class SubmitAnswerResponse(BaseModel):
-    score: float
-    feedback: str
-    next_question_id: Optional[int] = None
+    status: str
+
+class FinishInterviewResponse(BaseModel):
+    total_score: float
+    message: str
+    summary: str
 
 # --- Interview Schemas ---
 class InterviewBase(BaseModel):

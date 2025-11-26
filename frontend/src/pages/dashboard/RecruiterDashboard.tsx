@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { DashboardLayout } from '@/layouts/DashboardLayout';
+import { useNavigate } from 'react-router-dom';
+import { Plus, FileText, Users, MoreHorizontal, Edit, Trash, Eye } from 'lucide-react';
+import { toast } from 'sonner';
+
+import api from '@/lib/api';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Table,
     TableBody,
@@ -16,13 +23,25 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import api from '@/lib/api';
-import { Plus, FileText, Users } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Job {
     id: number;
@@ -30,15 +49,24 @@ interface Job {
     created_at: string;
     description: string;
     requirements: string;
-    // candidate_count is not yet in API, mocking for UI
     candidate_count?: number;
 }
 
 const RecruiterDashboard: React.FC = () => {
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'jobs' | 'candidates'>('jobs');
     const [jobs, setJobs] = useState<Job[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Dialog State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isReadOnly, setIsReadOnly] = useState(false);
+    const [currentJobId, setCurrentJobId] = useState<number | null>(null);
+
+    // Alert Dialog State
+    const [isAlertOpen, setIsAlertOpen] = useState(false);
+    const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
 
     // Form State
     const [title, setTitle] = useState('');
@@ -77,49 +105,117 @@ const RecruiterDashboard: React.FC = () => {
         }
     };
 
+    const resetForm = () => {
+        setTitle('');
+        setDescription('');
+        setRequirements('');
+        setFile(null);
+        setIsEditing(false);
+        setIsReadOnly(false);
+        setCurrentJobId(null);
+    };
+
+    const handleCreate = () => {
+        resetForm();
+        setIsDialogOpen(true);
+    };
+
+    const handleEdit = (job: Job) => {
+        setTitle(job.title);
+        setDescription(job.description);
+        setRequirements(job.requirements);
+        setFile(null); // Reset file, optional to update
+        setCurrentJobId(job.id);
+        setIsEditing(true);
+        setIsReadOnly(false);
+        setIsDialogOpen(true);
+    };
+
+    const handleViewContent = (job: Job) => {
+        setTitle(job.title);
+        setDescription(job.description);
+        setRequirements(job.requirements);
+        setFile(null);
+        setIsReadOnly(true);
+        setIsDialogOpen(true);
+    };
+
+    const handleDeleteClick = (job: Job) => {
+        setJobToDelete(job);
+        setIsAlertOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!jobToDelete) return;
+        try {
+            await api.delete(`/api/v1/jobs/${jobToDelete.id}`);
+            toast.success('Đã xóa tin tuyển dụng');
+            fetchJobs();
+        } catch (error) {
+            console.error('Error deleting job:', error);
+            toast.error('Lỗi khi xóa tin tuyển dụng');
+        } finally {
+            setIsAlertOpen(false);
+            setJobToDelete(null);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!title || !description || !requirements) {
             toast.error('Vui lòng điền đầy đủ thông tin');
             return;
         }
-        if (!file) {
+
+        // If creating, file is required. If editing, file is optional.
+        if (!isEditing && !file) {
             toast.error('Vui lòng upload kịch bản phỏng vấn (PDF)');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            // 1. Create Job
-            const jobData = { title, description, requirements };
-            const jobResponse = await api.post('/api/v1/jobs/', jobData);
-            const newJobId = jobResponse.data.id;
+            if (isEditing && currentJobId) {
+                // Update Job
+                await api.put(`/api/v1/jobs/${currentJobId}`, {
+                    title,
+                    description,
+                    requirements
+                });
 
-            // 2. Upload Script
-            const formData = new FormData();
-            formData.append('file', file);
+                // If file provided during edit, upload it
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    await api.post(`/api/v1/jobs/${currentJobId}/upload-script`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    });
+                }
+                toast.success('Cập nhật tin tuyển dụng thành công!');
+            } else {
+                // Create Job
+                const jobData = { title, description, requirements };
+                const jobResponse = await api.post('/api/v1/jobs/', jobData);
+                const newJobId = jobResponse.data.id;
 
-            await api.post(`/api/v1/jobs/${newJobId}/upload-script`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+                // Upload Script
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    await api.post(`/api/v1/jobs/${newJobId}/upload-script`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    });
+                }
+                toast.success('Tạo tin tuyển dụng thành công!');
+            }
 
-            toast.success('Tạo tin tuyển dụng thành công!');
             setIsDialogOpen(false);
-
-            // Reset form
-            setTitle('');
-            setDescription('');
-            setRequirements('');
-            setFile(null);
-
-            // Reload jobs
+            resetForm();
             fetchJobs();
 
         } catch (error) {
-            console.error('Error creating job:', error);
-            toast.error('Có lỗi xảy ra khi tạo tin tuyển dụng');
+            console.error('Error saving job:', error);
+            toast.error('Có lỗi xảy ra');
         } finally {
             setIsSubmitting(false);
         }
@@ -137,8 +233,8 @@ const RecruiterDashboard: React.FC = () => {
         <button
             onClick={() => setActiveTab(id)}
             className={`w-full flex items-center px-6 py-3 text-left transition-colors ${activeTab === id
-                    ? 'bg-primary/10 text-primary border-r-4 border-primary'
-                    : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-primary/10 text-primary border-r-4 border-primary'
+                : 'text-gray-600 hover:bg-gray-50'
                 }`}
         >
             <Icon className="w-5 h-5 mr-3" />
@@ -163,18 +259,20 @@ const RecruiterDashboard: React.FC = () => {
                             <p className="text-muted-foreground">Quản lý các vị trí đang tuyển dụng</p>
                         </div>
 
+                        <Button onClick={handleCreate}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Tạo Tin Tuyển Dụng
+                        </Button>
+
+                        {/* Create/Edit/View Dialog */}
                         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button>
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Tạo Tin Tuyển Dụng
-                                </Button>
-                            </DialogTrigger>
                             <DialogContent className="sm:max-w-[600px]">
                                 <DialogHeader>
-                                    <DialogTitle>Tạo Tin Tuyển Dụng Mới</DialogTitle>
+                                    <DialogTitle>
+                                        {isReadOnly ? 'Chi Tiết Tin Tuyển Dụng' : isEditing ? 'Sửa Tin Tuyển Dụng' : 'Tạo Tin Tuyển Dụng Mới'}
+                                    </DialogTitle>
                                     <DialogDescription>
-                                        Điền thông tin chi tiết và upload kịch bản phỏng vấn.
+                                        {isReadOnly ? 'Xem thông tin chi tiết.' : 'Điền thông tin chi tiết và upload kịch bản phỏng vấn.'}
                                     </DialogDescription>
                                 </DialogHeader>
                                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
@@ -186,6 +284,7 @@ const RecruiterDashboard: React.FC = () => {
                                             onChange={(e) => setTitle(e.target.value)}
                                             placeholder="VD: Senior React Developer"
                                             required
+                                            disabled={isReadOnly}
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -197,6 +296,7 @@ const RecruiterDashboard: React.FC = () => {
                                             onChange={(e) => setDescription(e.target.value)}
                                             placeholder="Mô tả chi tiết..."
                                             required
+                                            disabled={isReadOnly}
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -208,32 +308,55 @@ const RecruiterDashboard: React.FC = () => {
                                             onChange={(e) => setRequirements(e.target.value)}
                                             placeholder="Các kỹ năng cần thiết..."
                                             required
+                                            disabled={isReadOnly}
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="script">Kịch bản phỏng vấn (PDF)</Label>
-                                        <Input
-                                            id="script"
-                                            type="file"
-                                            accept="application/pdf"
-                                            onChange={handleFileChange}
-                                            required
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            File PDF chứa các câu hỏi và tiêu chí đánh giá cho AI.
-                                        </p>
-                                    </div>
+                                    {!isReadOnly && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="script">Kịch bản phỏng vấn (PDF)</Label>
+                                            <Input
+                                                id="script"
+                                                type="file"
+                                                accept="application/pdf"
+                                                onChange={handleFileChange}
+                                                required={!isEditing} // Required only for new jobs
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                {isEditing ? 'Upload file mới nếu muốn thay đổi.' : 'File PDF chứa các câu hỏi và tiêu chí đánh giá cho AI.'}
+                                            </p>
+                                        </div>
+                                    )}
                                     <DialogFooter>
                                         <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                            Hủy
+                                            {isReadOnly ? 'Đóng' : 'Hủy'}
                                         </Button>
-                                        <Button type="submit" disabled={isSubmitting}>
-                                            {isSubmitting ? 'Đang tạo...' : 'Tạo tin tuyển dụng'}
-                                        </Button>
+                                        {!isReadOnly && (
+                                            <Button type="submit" disabled={isSubmitting}>
+                                                {isSubmitting ? 'Đang xử lý...' : (isEditing ? 'Cập nhật' : 'Tạo tin tuyển dụng')}
+                                            </Button>
+                                        )}
                                     </DialogFooter>
                                 </form>
                             </DialogContent>
                         </Dialog>
+
+                        {/* Delete Alert Dialog */}
+                        <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Bạn có chắc chắn muốn xóa?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Hành động này không thể hoàn tác. Tin tuyển dụng và tất cả dữ liệu phỏng vấn liên quan sẽ bị xóa vĩnh viễn.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Hủy</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
+                                        Xóa
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
 
                     <div className="border rounded-md">
@@ -266,7 +389,34 @@ const RecruiterDashboard: React.FC = () => {
                                             <TableCell>{new Date(job.created_at).toLocaleDateString('vi-VN')}</TableCell>
                                             <TableCell>{job.candidate_count || 0}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm">Chi tiết</Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" className="h-8 w-8 p-0">
+                                                            <span className="sr-only">Open menu</span>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Hành động</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => navigate(`/jobs/${job.id}/candidates`)}>
+                                                            <Users className="mr-2 h-4 w-4" />
+                                                            Xem ứng viên
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleViewContent(job)}>
+                                                            <Eye className="mr-2 h-4 w-4" />
+                                                            Xem nội dung
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem onClick={() => handleEdit(job)}>
+                                                            <Edit className="mr-2 h-4 w-4" />
+                                                            Sửa tin
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleDeleteClick(job)} className="text-red-600">
+                                                            <Trash className="mr-2 h-4 w-4" />
+                                                            Xóa tin
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))

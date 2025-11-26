@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useTTS } from '@/hooks/useTTS';
+import ReactMarkdown from 'react-markdown';
 
 interface Question {
     question_text: string;
@@ -19,9 +21,6 @@ interface Message {
     id: string;
     sender: 'ai' | 'user';
     text: string;
-    score?: number;
-    feedback?: string;
-    isFeedback?: boolean;
 }
 
 const InterviewRoom: React.FC = () => {
@@ -33,6 +32,7 @@ const InterviewRoom: React.FC = () => {
     const [inputText, setInputText] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isFinished, setIsFinished] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +42,8 @@ const InterviewRoom: React.FC = () => {
         resetTranscript,
         browserSupportsSpeechRecognition
     } = useSpeechRecognition();
+
+    const { speak, cancel } = useTTS();
 
     // Auto-scroll to bottom
     const scrollToBottom = () => {
@@ -58,6 +60,23 @@ const InterviewRoom: React.FC = () => {
             setInputText(transcript);
         }
     }, [transcript]);
+
+    // Auto-speak AI messages
+    useEffect(() => {
+        if (messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            if (lastMessage.sender === 'ai') {
+                speak(lastMessage.text);
+            }
+        }
+    }, [messages, speak]);
+
+    // Cleanup TTS on unmount
+    useEffect(() => {
+        return () => {
+            cancel();
+        };
+    }, [cancel]);
 
     // Fetch Interview Details
     useEffect(() => {
@@ -82,23 +101,13 @@ const InterviewRoom: React.FC = () => {
                         text: q.question_text
                     });
 
-                    // If answered, push Answer and Feedback
+                    // If answered, push Answer
                     if (q.user_answer) {
                         history.push({
                             id: `a-${i}`,
                             sender: 'user',
                             text: q.user_answer
                         });
-
-                        // Push Feedback as separate AI message
-                        if (q.ai_feedback) {
-                            history.push({
-                                id: `f-${i}`,
-                                sender: 'ai',
-                                text: `Điểm số: ${q.ai_grade}/10\n\n${q.ai_feedback}`,
-                                isFeedback: true
-                            });
-                        }
 
                         lastAnsweredIndex = i;
                     } else {
@@ -138,55 +147,74 @@ const InterviewRoom: React.FC = () => {
             text: answerText
         }]);
 
-        setIsProcessing(true);
-
+        // Call API in background (don't wait for grading)
         try {
-            const response = await api.post(`/api/v1/interviews/${id}/submit`, {
+            await api.post(`/api/v1/interviews/${id}/submit`, {
                 question_id: currentQuestionIndex,
                 answer_text: answerText
             });
+        } catch (error) {
+            console.error("Error submitting answer:", error);
+            toast.error("Lỗi khi lưu câu trả lời (nhưng bạn cứ tiếp tục)");
+        }
 
-            const { score, feedback, next_question_id } = response.data;
+        // Move to next question immediately
+        const nextQIndex = currentQuestionIndex + 1;
+        if (nextQIndex < questions.length) {
+            setCurrentQuestionIndex(nextQIndex);
+            const nextQ = questions[nextQIndex];
 
-            // Add Feedback Message
-            setMessages(prev => [...prev, {
-                id: `f-${currentQuestionIndex}`,
-                sender: 'ai',
-                text: `Điểm số: ${score}/10\n\n${feedback}`,
-                isFeedback: true
-            }]);
+            // Small delay for natural feel
+            setTimeout(() => {
+                setMessages(prev => [...prev, {
+                    id: `q-${nextQIndex}`,
+                    sender: 'ai',
+                    text: nextQ.question_text
+                }]);
+            }, 500);
+        } else {
+            // Finished all questions - Auto Finish
+            setTimeout(() => {
+                setMessages(prev => [...prev, {
+                    id: 'finish-wait',
+                    sender: 'ai',
+                    text: "Cảm ơn bạn. Đợi tôi tổng hợp kết quả..."
+                }]);
+                handleFinish();
+            }, 500);
+        }
+    };
 
-            // Handle Next Question
-            if (next_question_id !== null) {
-                setCurrentQuestionIndex(next_question_id);
-                setTimeout(() => {
-                    const nextQ = questions[next_question_id];
-                    setMessages(prev => [...prev, {
-                        id: `q-${next_question_id}`,
-                        sender: 'ai',
-                        text: nextQ.question_text
-                    }]);
-                }, 1000);
-            } else {
-                // Finished
-                setTimeout(() => {
-                    setMessages(prev => [...prev, {
-                        id: 'finish',
-                        sender: 'ai',
-                        text: "Chúc mừng bạn đã hoàn thành buổi phỏng vấn! Bạn có thể xem kết quả tổng hợp ngay bây giờ."
-                    }]);
-                }, 1000);
+    const handleFinish = async () => {
+        setIsProcessing(true); // Show loading overlay
+        try {
+            const response = await api.post(`/api/v1/interviews/${id}/finish`);
+            const { summary } = response.data;
+
+            setIsFinished(true);
+            toast.success("Nộp bài thành công!");
+
+            // Add Summary Message
+            if (summary) {
+                setMessages(prev => [...prev, {
+                    id: 'summary',
+                    sender: 'ai',
+                    text: summary
+                }]);
+                // Speak the summary
+                speak(summary);
             }
 
         } catch (error) {
-            console.error("Error submitting answer:", error);
-            toast.error("Lỗi khi gửi câu trả lời");
+            console.error("Error finishing interview:", error);
+            toast.error("Lỗi khi nộp bài");
         } finally {
             setIsProcessing(false);
         }
     };
 
     const toggleListening = () => {
+        cancel(); // Stop AI speaking immediately
         if (listening) {
             SpeechRecognition.stopListening();
         } else {
@@ -211,7 +239,7 @@ const InterviewRoom: React.FC = () => {
                     <h1 className="text-xl font-bold text-gray-800">Phỏng vấn AI</h1>
                     <p className="text-sm text-gray-500">Job ID: {id}</p>
                 </div>
-                <Button variant="destructive" onClick={() => navigate('/my-interviews')}>
+                <Button variant="destructive" onClick={() => navigate('/candidate-dashboard')}>
                     Kết thúc
                 </Button>
             </header>
@@ -246,29 +274,30 @@ const InterviewRoom: React.FC = () => {
                                         ? "bg-blue-600 text-white rounded-tr-none"
                                         : "bg-white text-gray-800 border rounded-tl-none"
                                 )}>
-                                    {msg.text}
-                                </div>
-
-                                {/* Feedback & Score (Only for User messages) */}
-                                {msg.score !== undefined && (
-                                    <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 animate-in fade-in slide-in-from-top-2">
-                                        <div className="font-bold mb-1">Điểm số: {msg.score}/10</div>
-                                        <div>{msg.feedback}</div>
+                                    <div className="prose prose-sm max-w-none">
+                                        <ReactMarkdown>
+                                            {msg.text}
+                                        </ReactMarkdown>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     </div>
                 ))}
 
-                {isProcessing && (
-                    <div className="flex justify-start w-full">
-                        <div className="flex flex-row items-center ml-14 space-x-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                            <span className="text-sm text-gray-500 italic">AI đang chấm điểm...</span>
-                        </div>
+                {/* Back to Dashboard Button if finished */}
+                {isFinished && (
+                    <div className="flex justify-center py-4">
+                        <Button
+                            size="lg"
+                            onClick={() => navigate('/candidate-dashboard')}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            Quay về Dashboard
+                        </Button>
                     </div>
                 )}
+
                 <div ref={messagesEndRef} />
             </main>
 
@@ -303,7 +332,7 @@ const InterviewRoom: React.FC = () => {
 
                     <Button
                         onClick={handleSend}
-                        disabled={!inputText.trim() || isProcessing}
+                        disabled={!inputText.trim() || isProcessing || currentQuestionIndex >= questions.length || isFinished}
                         className="rounded-full w-12 h-12 shrink-0"
                     >
                         <Send className="w-5 h-5" />

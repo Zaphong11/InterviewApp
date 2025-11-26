@@ -4,6 +4,7 @@ from app.api import deps
 from app.db.session import get_db
 from app.db.models import User, Job, Interview, InterviewStatus
 from app.schemas import interview as interview_schema
+from typing import Union
 from pydantic import BaseModel
 from app.services.grading_service import grade_answer
 from sqlalchemy.orm.attributes import flag_modified
@@ -27,6 +28,14 @@ def start_interview(
     job = db.query(Job).filter(Job.id == request.job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Check if interview already exists for this candidate and job
+    existing_interview = db.query(Interview).filter(
+        Interview.job_id == request.job_id,
+        Interview.candidate_id == current_user.id
+    ).first()
+    if existing_interview:
+        return existing_interview
     
     if not job.questions_template:
         raise HTTPException(status_code=400, detail="Job does not have questions template")
@@ -71,7 +80,7 @@ def start_interview(
     
     return new_interview
 
-@router.get("/{interview_id}", response_model=interview_schema.InterviewCandidateView)
+@router.get("/{interview_id}", response_model=Union[interview_schema.Interview, interview_schema.InterviewCandidateView])
 def get_interview(
     interview_id: int,
     db: Session = Depends(get_db),
@@ -86,17 +95,19 @@ def get_interview(
         raise HTTPException(status_code=404, detail="Interview not found")
 
     # Check ownership or role
-    # Candidate can only see their own interview
-    if current_user.role == "candidate" and interview.candidate_id != current_user.id:
-         raise HTTPException(status_code=403, detail="Not authorized to view this interview")
+    if current_user.role == "candidate":
+        if interview.candidate_id != current_user.id:
+             raise HTTPException(status_code=403, detail="Not authorized to view this interview")
+        return interview # Returns InterviewCandidateView (pydantic will filter)
     
-    # Business/Admin might be allowed to see all (or specific logic), 
-    # but for now let's just allow the candidate to see their own.
-    # If the user is the recruiter of the job, they should probably see the full version (with criteria),
-    # but this endpoint uses InterviewCandidateView which HIDES criteria.
-    # So this endpoint is specifically for the "Taking Interview" view.
-    
-    return interview
+    # If business/admin, check if they own the job (optional but good practice)
+    # For now, allow business to see full details
+    if current_user.role == "business":
+        job = db.query(Job).filter(Job.id == interview.job_id).first()
+        if job.recruiter_id != current_user.id:
+             raise HTTPException(status_code=403, detail="Not authorized to view this interview")
+        return interview # Returns full Interview
+
     return interview
 
 @router.post("/{interview_id}/submit", response_model=interview_schema.SubmitAnswerResponse)
@@ -125,17 +136,13 @@ def submit_answer(
     
     question_data = questions[request.question_id]
     
-    # 3. Grade Answer
-    grading_result = grade_answer(
-        question=question_data["question_text"],
-        criteria=question_data["criteria"],
-        user_answer=request.answer_text
-    )
+    # 3. Save Answer (No Grading)
+    # grading_result = grade_answer(...) -> REMOVED
     
     # 4. Update Content
     question_data["user_answer"] = request.answer_text
-    question_data["ai_grade"] = grading_result["score"]
-    question_data["ai_feedback"] = grading_result["feedback"] # Store feedback if needed in schema, currently schema has ai_grade only in Question model but we can add it to dict
+    question_data["ai_grade"] = None # Reset grade if re-answering
+    question_data["ai_feedback"] = None
     
     # Update the list in the content dict
     questions[request.question_id] = question_data
@@ -144,18 +151,71 @@ def submit_answer(
     # Explicitly flag modified for JSONB
     flag_modified(interview, "content")
     
-    # 5. Update Total Score
-    total_score = sum([q.get("ai_grade", 0) or 0 for q in questions])
+    # 5. Update Total Score -> REMOVED (will be done in finish)
+    
+    db.commit()
+    # db.refresh(interview) -> Not strictly needed if we just return status
+    
+    return {"status": "saved"}
+
+
+@router.post("/{interview_id}/finish", response_model=interview_schema.FinishInterviewResponse)
+def finish_interview(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowCandidate)
+):
+    """
+    Nộp bài và chấm điểm toàn bộ (Batch Grading).
+    """
+    # 1. Get Interview
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    
+    if interview.candidate_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    questions = interview.content.get("questions", [])
+    total_score = 0.0
+    
+    # 2. Batch Grading
+    for q in questions:
+        # Only grade if there is an answer and not yet graded (or force re-grade?)
+        # Let's grade if user_answer exists.
+        if q.get("user_answer"):
+             # Call Grading Service
+             grading_result = grade_answer(
+                question=q["question_text"],
+                criteria=q.get("criteria", []),
+                user_answer=q["user_answer"]
+            )
+             q["ai_grade"] = grading_result["score"]
+             q["ai_feedback"] = grading_result["feedback"]
+             
+             total_score += grading_result["score"]
+        else:
+            # No answer -> 0 score
+            q["ai_grade"] = 0.0
+            q["ai_feedback"] = "Không có câu trả lời."
+
+    # 3. Generate Summary
+    from app.services.grading_service import generate_final_summary
+    summary = generate_final_summary(questions)
+    
+    # 4. Update Interview
+    interview.content["questions"] = questions
+    flag_modified(interview, "content")
+    
     interview.total_score = total_score
+    interview.ai_feedback = summary # Save summary to ai_feedback column
+    interview.status = InterviewStatus.COMPLETED
     
     db.commit()
     db.refresh(interview)
     
-    # 6. Determine Next Question
-    next_question_id = request.question_id + 1 if request.question_id + 1 < len(questions) else None
-    
     return {
-        "score": grading_result["score"],
-        "feedback": grading_result["feedback"],
-        "next_question_id": next_question_id
+        "total_score": total_score,
+        "message": "Graded successfully",
+        "summary": summary
     }

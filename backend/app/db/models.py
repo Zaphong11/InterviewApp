@@ -69,6 +69,7 @@ class Interview(Base):
     total_score = Column(Float, nullable=True)
     ai_feedback = Column(Text, nullable=True)
     content = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     job = relationship("Job", back_populates="interviews")

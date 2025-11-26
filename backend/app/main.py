@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, jobs, interviews
+from app.api.endpoints import auth, jobs, interviews, tts, admin
 from app.db.models import Base
 from app.db.session import engine
 from app.db.models import User
@@ -35,6 +35,8 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
 app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["Interviews"])
+app.include_router(tts.router, prefix="/api/v1/tts", tags=["TTS"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 
 # --- Ví dụ về Endpoint được bảo vệ bằng Phân quyền ---
 from fastapi import Depends, APIRouter
