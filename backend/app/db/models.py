@@ -30,6 +30,9 @@ class User(Base):
     
     # Trường bổ sung cho Business (Tên công ty)
     company_name = Column(String, nullable=True) 
+    
+    # Link CV (cho Candidate)
+    cv_url = Column(String, nullable=True)
 
     def __repr__(self):
         return f"<User(email='{self.email}', role='{self.role.value}')>"
@@ -59,6 +62,11 @@ class InterviewStatus(str, enum.Enum):
     COMPLETED = "completed"
     GRADED = "graded"
 
+class InterviewDecision(str, enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
 class Interview(Base):
     __tablename__ = "interviews"
 
@@ -70,6 +78,9 @@ class Interview(Base):
     ai_feedback = Column(Text, nullable=True)
     content = Column(JSONB, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Decision column
+    decision = Column(String, default="PENDING") # Using String for simplicity to match schemas, or Enum(InterviewDecision)
 
     # Relationships
     job = relationship("Job", back_populates="interviews")

@@ -4,15 +4,38 @@ from app.api import deps
 from app.db.session import get_db
 from app.db.models import User, Job, Interview, InterviewStatus
 from app.schemas import interview as interview_schema
-from typing import Union
+from typing import Union, List
 from pydantic import BaseModel
 from app.services.grading_service import grade_answer
 from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy import desc
 
 router = APIRouter()
 
 class StartInterviewRequest(BaseModel):
     job_id: int
+
+@router.get("/me", response_model=List[interview_schema.InterviewListItem])
+def get_my_interviews(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowCandidate)
+):
+    """
+    Lấy lịch sử phỏng vấn của candidate hiện tại.
+    """
+    results = db.query(
+        Interview.id,
+        Interview.created_at,
+        Interview.status,
+        Interview.total_score,
+        Interview.decision,
+        Job.title.label("job_title")
+    ).join(Job, Interview.job_id == Job.id)\
+    .filter(Interview.candidate_id == current_user.id)\
+    .order_by(desc(Interview.created_at))\
+    .all()
+
+    return results
 
 @router.post("/start", response_model=interview_schema.Interview)
 def start_interview(
@@ -219,3 +242,35 @@ def finish_interview(
         "message": "Graded successfully",
         "summary": summary
     }
+
+@router.put("/{interview_id}/decision", response_model=interview_schema.Interview)
+def update_decision(
+    interview_id: int,
+    decision_update: interview_schema.InterviewDecisionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    Cập nhật quyết định tuyển dụng (ACCEPTED/REJECTED).
+    Chỉ Recruiter (chủ Job) hoặc Admin mới được gọi.
+    """
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+        
+    # Check permissions
+    if current_user.role == "admin":
+        pass # Admin can do anything
+    elif current_user.role == "business":
+        job = db.query(Job).filter(Job.id == interview.job_id).first()
+        if job.recruiter_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to update this interview")
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    # Update decision
+    interview.decision = decision_update.decision
+    db.commit()
+    db.refresh(interview)
+    
+    return interview

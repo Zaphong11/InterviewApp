@@ -2,7 +2,7 @@
 
 from fastapi import Depends, HTTPException, status
 from app.db.models import User, Role
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_user_optional
 
 # --- Hàm kiểm tra Role ---
 

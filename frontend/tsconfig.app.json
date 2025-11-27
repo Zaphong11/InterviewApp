@@ -36,5 +36,5 @@
   },
   "include": [
     "src"
-  ]
+, "src/components/ui/alert-dialog.tsx", "src/components/ui/button.tsx", "src/components/ui/dropdown-menu.tsx", "src/components/ui/tooltip.tsx"  ]
 }

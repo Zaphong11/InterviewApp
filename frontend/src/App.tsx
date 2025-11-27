@@ -13,6 +13,8 @@ import AdminDashboard from "@/pages/dashboard/AdminDashboard"
 
 import InterviewRoom from "@/pages/interview/InterviewRoom"
 
+import CandidateResult from "@/pages/interview/CandidateResult"
+
 // Placeholder components
 const InterviewDetail = () => <div className="p-8 text-2xl">Interview Detail</div>
 
@@ -35,6 +37,7 @@ function App() {
         {/* Protected Routes - Candidate */}
         <Route element={<ProtectedRoute allowedRoles={['candidate']} />}>
           <Route path="/candidate-dashboard" element={<CandidateDashboard />} />
+          <Route path="/my-result/:id" element={<CandidateResult />} />
           <Route path="/interview/:id" element={<InterviewDetail />} />
           <Route path="/interview/:id/room" element={<InterviewRoom />} />
         </Route>

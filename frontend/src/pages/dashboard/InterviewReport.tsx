@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { ArrowLeft, AlertCircle, FileText, Users } from 'lucide-react';
+import { ArrowLeft, AlertCircle, FileText, Users, CheckCircle, XCircle } from 'lucide-react';
 
 interface Criteria {
     keyword: string;
@@ -30,6 +30,13 @@ interface Question {
     criteria: Criteria[];
 }
 
+interface Candidate {
+    id: number;
+    full_name: string;
+    email: string;
+    cv_url?: string;
+}
+
 interface Interview {
     id: number;
     job_id: number;
@@ -37,6 +44,8 @@ interface Interview {
     status: string;
     total_score: number | null;
     ai_feedback: string | null;
+    decision: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+    candidate?: Candidate; // Add candidate info if backend returns it, or fetch separately
     content: {
         questions: Question[];
     };
@@ -47,6 +56,7 @@ const InterviewReport: React.FC = () => {
     const navigate = useNavigate();
     const [interview, setInterview] = useState<Interview | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         if (interviewId) {
@@ -67,6 +77,23 @@ const InterviewReport: React.FC = () => {
         }
     };
 
+    const handleDecision = async (decision: 'ACCEPTED' | 'REJECTED') => {
+        if (!interview) return;
+        setIsProcessing(true);
+        try {
+            const response = await api.put(`/api/v1/interviews/${interview.id}/decision`, {
+                decision,
+            });
+            setInterview(response.data);
+            toast.success(`Đã ${decision === 'ACCEPTED' ? 'chấp nhận' : 'từ chối'} ứng viên`);
+        } catch (error) {
+            console.error('Failed to update decision:', error);
+            toast.error('Có lỗi xảy ra khi cập nhật trạng thái');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const getScoreColor = (score: number | null) => {
         if (score === null) return 'text-gray-500';
         if (score >= 8) return 'text-green-600';
@@ -76,7 +103,7 @@ const InterviewReport: React.FC = () => {
 
     if (isLoading) {
         return (
-            <DashboardLayout sidebar={<div></div>}>
+            <DashboardLayout>
                 <div className="flex items-center justify-center h-full">
                     <p>Đang tải báo cáo...</p>
                 </div>
@@ -86,7 +113,7 @@ const InterviewReport: React.FC = () => {
 
     if (!interview) {
         return (
-            <DashboardLayout sidebar={<div></div>}>
+            <DashboardLayout>
                 <div className="flex items-center justify-center h-full">
                     <p>Không tìm thấy báo cáo.</p>
                 </div>
@@ -95,34 +122,64 @@ const InterviewReport: React.FC = () => {
     }
 
     return (
-        <DashboardLayout
-            sidebar={
-                <nav className="space-y-1">
-                    <button
-                        onClick={() => navigate('/dashboard')}
-                        className="w-full flex items-center px-6 py-3 text-left transition-colors text-gray-600 hover:bg-gray-50"
-                    >
-                        <Users className="w-5 h-5 mr-3" />
-                        <span className="font-medium">Ứng viên</span>
-                    </button>
-                    <button
-                        onClick={() => navigate('/dashboard')}
-                        className="w-full flex items-center px-6 py-3 text-left transition-colors text-gray-600 hover:bg-gray-50"
-                    >
-                        <FileText className="w-5 h-5 mr-3" />
-                        <span className="font-medium">Tin tuyển dụng</span>
-                    </button>
-                </nav>
-            }
-        >
+        <DashboardLayout>
             <div className="space-y-6 max-w-4xl mx-auto">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-                        <ArrowLeft className="w-5 h-5" />
-                    </Button>
-                    <div>
-                        <h2 className="text-2xl font-bold tracking-tight">Báo cáo Phỏng vấn</h2>
-                        <p className="text-muted-foreground">ID: {interview.id} - Status: {interview.status}</p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+                            <ArrowLeft className="w-5 h-5" />
+                        </Button>
+                        <div>
+                            <h2 className="text-2xl font-bold tracking-tight">Báo cáo Phỏng vấn</h2>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <span>ID: {interview.id}</span>
+                                <span>•</span>
+                                <Badge variant="outline">{interview.status}</Badge>
+                                {interview.decision !== 'PENDING' && (
+                                    <Badge className={interview.decision === 'ACCEPTED' ? 'bg-green-600' : 'bg-red-600'}>
+                                        {interview.decision === 'ACCEPTED' ? 'ĐÃ CHẤP NHẬN' : 'ĐÃ TỪ CHỐI'}
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {interview.candidate?.cv_url ? (
+                            <Button
+                                variant="outline"
+                                onClick={() => window.open(interview.candidate?.cv_url, '_blank')}
+                            >
+                                <FileText className="w-4 h-4 mr-2" />
+                                Xem CV Ứng viên
+                            </Button>
+                        ) : (
+                            <Button variant="outline" disabled title="Ứng viên chưa cập nhật CV">
+                                <FileText className="w-4 h-4 mr-2" />
+                                Không có CV
+                            </Button>
+                        )}
+
+                        {interview.decision === 'PENDING' && (
+                            <>
+                                <Button
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => handleDecision('ACCEPTED')}
+                                    disabled={isProcessing}
+                                >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Chấp nhận
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    onClick={() => handleDecision('REJECTED')}
+                                    disabled={isProcessing}
+                                >
+                                    <XCircle className="w-4 h-4 mr-2" />
+                                    Từ chối
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -137,7 +194,7 @@ const InterviewReport: React.FC = () => {
                             <div className="text-center">
                                 <span className="text-sm text-muted-foreground uppercase tracking-wider">Tổng điểm</span>
                                 <div className={`text-4xl font-bold ${getScoreColor(interview.total_score)}`}>
-                                    {interview.total_score !== null ? interview.total_score.toFixed(1) : '-'}
+                                    {typeof interview.total_score === 'number' ? interview.total_score.toFixed(1) : '-'}
                                     <span className="text-lg text-gray-400 font-normal">/ {interview.content.questions.length * 10}</span>
                                 </div>
                             </div>

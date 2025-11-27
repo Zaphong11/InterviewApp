@@ -2,10 +2,12 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import auth, jobs, interviews, tts, admin
+from fastapi.staticfiles import StaticFiles
+from app.api.endpoints import auth, jobs, interviews, tts, admin, users
 from app.db.models import Base
 from app.db.session import engine
 from app.db.models import User
+import os
 
 # Tùy chọn: Khởi tạo bảng nếu không dùng Alembic (Không khuyến khích cho Production)
 # Base.metadata.create_all(bind=engine) 
@@ -31,8 +33,14 @@ app.add_middleware(
     allow_headers=["*"], # Cho phép tất cả các header
 )
 
+# Mount Static Files
+# Ensure uploads directory exists
+os.makedirs("uploads/cvs", exist_ok=True)
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
+
 # Thêm Router cho Authentication
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["Jobs"])
 app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["Interviews"])
 app.include_router(tts.router, prefix="/api/v1/tts", tags=["TTS"])

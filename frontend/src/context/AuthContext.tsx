@@ -6,7 +6,8 @@ interface User {
     id: string;
     email: string;
     full_name?: string;
-    role: 'admin' | 'business' | 'candidate'; // Thêm dòng này
+    role: 'admin' | 'business' | 'candidate';
+    cv_url?: string;
     [key: string]: any;
 }
 
@@ -16,6 +17,7 @@ interface AuthContextType {
     isLoading: boolean;
     login: (token: string, userData?: User) => Promise<User | null>;
     logout: () => void;
+    refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,7 +33,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const token = localStorage.getItem('token');
             if (token) {
                 try {
-                    // --- SỬA Ở ĐÂY: Bỏ /api/v1 đi ---
                     const response = await api.get('/api/v1/auth/me');
                     setUser(response.data);
                     setIsAuthenticated(true);
@@ -59,7 +60,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
             // Nếu chưa có, gọi API lấy thông tin
             try {
-                // --- SỬA Ở ĐÂY: Bỏ /api/v1 đi ---
                 const response = await api.get('/api/v1/auth/me');
 
                 const profile = response.data;
@@ -81,11 +81,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('token');
         setUser(null);
         setIsAuthenticated(false);
-        // Có thể thêm navigate('/login') ở đây nếu muốn
+    };
+
+    const refreshProfile = async () => {
+        try {
+            const response = await api.get('/api/v1/auth/me');
+            setUser(response.data);
+        } catch (error) {
+            console.error('Failed to refresh profile:', error);
+        }
     };
 
     return (
-        <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, logout }}>
+        <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, logout, refreshProfile }}>
             {children}
         </AuthContext.Provider>
     );

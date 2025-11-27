@@ -34,21 +34,21 @@ def create_job(
 @router.get("/", response_model=List[job_schema.Job])
 def read_jobs(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(deps.get_current_user_optional),
     skip: int = 0,
     limit: int = 100
 ):
     """
     Retrieve jobs.
     If user is business/recruiter, return only their jobs.
-    Otherwise, return all jobs.
+    Otherwise (Admin, Candidate, Anonymous), return all jobs.
     """
     query = db.query(
         Job,
         func.count(Interview.id).label("candidate_count")
     ).outerjoin(Interview, Job.id == Interview.job_id)
 
-    if current_user.role == Role.BUSINESS:
+    if current_user and current_user.role == Role.BUSINESS:
         query = query.filter(Job.recruiter_id == current_user.id)
 
     results = query.group_by(Job.id).offset(skip).limit(limit).all()
@@ -180,26 +180,32 @@ def update_job(
     return job
 
 
-@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{job_id}", status_code=204)
 def delete_job(
     job_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.AllowBusiness)
+    current_user: User = Depends(deps.get_current_user),
 ):
-    """
-    Delete a job.
-    Only the recruiter who created the job can delete it.
-    """
+    # 1. Tìm Job
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if job.recruiter_id != current_user.id and current_user.role != Role.ADMIN:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this job")
+    # 2. FIX LỖI PERMISSION: Cho phép cả 'admin' và chủ sở hữu ('business') xóa
+    # Nếu không phải Admin VÀ không phải là người tạo ra job đó -> Chặn
+    if current_user.role != 'admin' and job.recruiter_id != current_user.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Bạn không có quyền xóa tin tuyển dụng này."
+        )
 
-    # Manually delete related interviews to ensure clean deletion
-    db.query(Interview).filter(Interview.job_id == job_id).delete()
+    # 3. FIX LỖI INTEGRITY (Quan trọng): Xóa con trước rồi mới xóa cha
+    # Xóa tất cả các buổi phỏng vấn liên quan đến Job này trước
+    # (Để tránh việc DB cố set job_id = null gây lỗi NotNullViolation)
+    db.query(Interview).filter(Interview.job_id == job_id).delete(synchronize_session=False)
 
+    # Sau khi dọn sạch con cái, giờ mới xóa Job
     db.delete(job)
     db.commit()
+    
     return None

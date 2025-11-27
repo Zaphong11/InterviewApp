@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
+from datetime import datetime
 from app.db.models import InterviewStatus
 
 # --- Content Schemas ---
@@ -56,9 +57,18 @@ class Interview(InterviewBase):
     status: InterviewStatus
     total_score: Optional[float] = None
     ai_feedback: Optional[str] = None
+    decision: str = "PENDING"
+
+    @field_validator('decision', mode='before')
+    @classmethod
+    def set_default_decision(cls, v):
+        return v or "PENDING"
 
     class Config:
         from_attributes = True
+
+class InterviewDecisionUpdate(BaseModel):
+    decision: str
 
 class InterviewCandidateView(BaseModel):
     id: int
@@ -66,5 +76,21 @@ class InterviewCandidateView(BaseModel):
     status: InterviewStatus
     content: InterviewContentCandidate
     
+    class Config:
+        from_attributes = True
+
+class InterviewListItem(BaseModel):
+    id: int
+    job_title: str
+    created_at: datetime
+    status: InterviewStatus
+    total_score: Optional[float] = None
+    decision: str = "PENDING"
+
+    @field_validator('decision', mode='before')
+    @classmethod
+    def set_default_decision(cls, v):
+        return v or "PENDING"
+
     class Config:
         from_attributes = True
