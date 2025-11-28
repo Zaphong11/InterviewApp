@@ -85,15 +85,21 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ isOpen, on
                                         <span className="text-sm font-medium truncate flex-1">
                                             CV hiện tại
                                         </span>
-                                        <a
-                                            href={user.cv_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800"
+                                        <button
+                                            onClick={() => {
+                                                if (!user.cv_url) return;
+                                                let url = user.cv_url;
+                                                if (url.startsWith('/')) {
+                                                    const baseURL = api.defaults.baseURL || 'http://127.0.0.1:8000';
+                                                    url = `${baseURL.replace(/\/$/, '')}${url}`;
+                                                }
+                                                window.open(url, '_blank');
+                                            }}
+                                            className="text-blue-600 hover:text-blue-800 cursor-pointer"
                                             title="Xem CV"
                                         >
                                             <ExternalLink className="h-4 w-4" />
-                                        </a>
+                                        </button>
                                     </div>
                                     <Button
                                         variant="outline"

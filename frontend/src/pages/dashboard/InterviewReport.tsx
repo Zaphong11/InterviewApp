@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { ArrowLeft, AlertCircle, FileText, Users, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, FileText, CheckCircle, XCircle } from 'lucide-react';
 
 interface Criteria {
     keyword: string;
@@ -101,6 +101,18 @@ const InterviewReport: React.FC = () => {
         return 'text-red-600';
     };
 
+    const handleViewCV = () => {
+        if (!interview?.candidate?.cv_url) return;
+        let url = interview.candidate.cv_url;
+        // Nếu là đường dẫn tương đối (bắt đầu bằng /), nối thêm baseURL
+        if (url.startsWith('/')) {
+            const baseURL = api.defaults.baseURL || 'http://127.0.0.1:8000';
+            // Đảm bảo không bị double slash
+            url = `${baseURL.replace(/\/$/, '')}${url}`;
+        }
+        window.open(url, '_blank');
+    };
+
     if (isLoading) {
         return (
             <DashboardLayout>
@@ -148,7 +160,7 @@ const InterviewReport: React.FC = () => {
                         {interview.candidate?.cv_url ? (
                             <Button
                                 variant="outline"
-                                onClick={() => window.open(interview.candidate?.cv_url, '_blank')}
+                                onClick={handleViewCV}
                             >
                                 <FileText className="w-4 h-4 mr-2" />
                                 Xem CV Ứng viên

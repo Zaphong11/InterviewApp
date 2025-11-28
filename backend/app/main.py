@@ -35,8 +35,11 @@ app.add_middleware(
 
 # Mount Static Files
 # Ensure uploads directory exists
-os.makedirs("uploads/cvs", exist_ok=True)
-app.mount("/static", StaticFiles(directory="uploads"), name="static")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(os.path.join(UPLOAD_DIR, "cvs"), exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
 # Thêm Router cho Authentication
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])

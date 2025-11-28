@@ -9,3 +9,4 @@ pypdf
 langchain
 langchain-google-genai
 langchain-community
+aiofiles

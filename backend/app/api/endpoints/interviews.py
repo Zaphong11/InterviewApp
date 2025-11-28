@@ -113,7 +113,8 @@ def get_interview(
     Lấy thông tin phỏng vấn.
     Ẩn criteria (đáp án) khỏi kết quả trả về cho Candidate.
     """
-    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    from sqlalchemy.orm import joinedload
+    interview = db.query(Interview).options(joinedload(Interview.candidate)).filter(Interview.id == interview_id).first()
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
 

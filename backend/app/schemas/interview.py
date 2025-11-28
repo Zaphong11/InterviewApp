@@ -52,12 +52,22 @@ class InterviewUpdate(BaseModel):
     ai_feedback: Optional[str] = None
     content: Optional[InterviewContent] = None
 
+class Candidate(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    cv_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class Interview(InterviewBase):
     id: int
     status: InterviewStatus
     total_score: Optional[float] = None
     ai_feedback: Optional[str] = None
     decision: str = "PENDING"
+    candidate: Optional[Candidate] = None
 
     @field_validator('decision', mode='before')
     @classmethod
