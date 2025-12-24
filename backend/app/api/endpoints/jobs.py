@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app.db.session import get_db
 from app.db.models import Job, User, Role, Interview
 from app.services.pdf_service import parse_interview_pdf
 from app.api.deps import get_current_user
-from typing import Any, List
+from typing import Any, List, Optional
 
 from app.schemas import job as job_schema
 from app.api import deps
@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.post("/", response_model=job_schema.Job)
 def create_job(
-    job_in: job_schema.JobUpdate,
+    job_in: job_schema.JobCreate, # Changed from JobUpdate to JobCreate for strict creation validation
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.AllowBusiness)
 ):
@@ -22,6 +22,24 @@ def create_job(
     Tạo Job mới.
     Chỉ Business mới được tạo.
     """
+    # 1. Validate Industry
+    # Assuming industry_id is passed in job_in
+    if hasattr(job_in, 'industry_id') and job_in.industry_id:
+         # Note: job_in.industry_id should exist based on new schema
+         from app.db.models import Industry
+         industry = db.query(Industry).filter(Industry.id == job_in.industry_id).first()
+         if not industry:
+             raise HTTPException(status_code=400, detail="Industry not found")
+
+    # 2. Validate Job Type (Strict check: REMOTE, PART_TIME, FULL_TIME only?)
+    # User said "Allow list... Only accept 3 values".
+    # Assuming the Schema Enum has more but we only allow these 3 at POST:
+    allowed_types = {"REMOTE", "PART_TIME", "FULL_TIME"}
+    if job_in.job_type:
+        for jt in job_in.job_type:
+            if jt.value not in allowed_types:
+                raise HTTPException(status_code=400, detail=f"Invalid job type: {jt}. Allowed: {allowed_types}")
+
     job = Job(
         **job_in.dict(),
         recruiter_id=current_user.id
@@ -36,12 +54,15 @@ def read_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user_optional),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    q: Optional[str] = None,
+    job_type: Optional[List[job_schema.JobType]] = Query(None),
+    industry: Optional[str] = None,
+    min_salary: Optional[int] = Query(None, alias="min_salary"),
+    location: Optional[str] = None,
 ):
     """
-    Retrieve jobs.
-    If user is business/recruiter, return only their jobs.
-    Otherwise (Admin, Candidate, Anonymous), return all jobs.
+    Retrieve jobs with filtering.
     """
     query = db.query(
         Job,
@@ -50,6 +71,40 @@ def read_jobs(
 
     if current_user and current_user.role == Role.BUSINESS:
         query = query.filter(Job.recruiter_id == current_user.id)
+
+    # Dynamic Filtering
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            or_(
+                Job.title.ilike(search),
+                Job.description.ilike(search)
+            )
+        )
+    
+    if job_type:
+        # Check if job's job_type array overlaps with the filtered types
+        query = query.filter(Job.job_type.overlap(job_type))
+    
+    if industry:
+        try:
+            ind_id = int(industry)
+            query = query.filter(Job.industry_id == ind_id)
+        except ValueError:
+            pass # Invalid ID format, ignore filter
+
+    
+    if min_salary:
+        # Filter jobs where max_salary >= min_salary (if exists) or salary_min >= min_salary
+        # Simplest logic: Check if provided salary range overlaps or meets expectation.
+        # Let's assume user wants jobs that pay AT LEAST min_salary eventually.
+        # So we check if salary_max (potential) >= min_salary. 
+        # If salary_max is NULL (agreement), we might include or exclude based on policy.
+        # Here: we filter if salary_min >= min_salary requested.
+        query = query.filter(Job.salary_min >= min_salary)
+        
+    if location:
+        query = query.filter(Job.location.ilike(f"%{location}%"))
 
     results = query.group_by(Job.id).offset(skip).limit(limit).all()
 

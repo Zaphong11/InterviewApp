@@ -143,7 +143,7 @@ const CandidateDashboard: React.FC = () => {
                                             <TableCell>
                                                 {interview.total_score !== null ? (
                                                     <span className="font-bold text-primary">
-                                                        {interview.total_score.toFixed(1)}/10
+                                                        {interview.total_score.toFixed(1)}/100
                                                     </span>
                                                 ) : (
                                                     <span className="text-muted-foreground">-</span>

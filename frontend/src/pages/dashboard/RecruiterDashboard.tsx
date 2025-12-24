@@ -50,12 +50,24 @@ interface Job {
     description: string;
     requirements: string;
     candidate_count?: number;
+    industry_id?: number;
+    job_type?: string[]; // Array of strings (enums)
+    location?: string;
+    salary_min?: number;
+    salary_max?: number;
+}
+
+interface Industry {
+    id: number;
+    name: string;
+    slug: string;
 }
 
 const RecruiterDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'jobs' | 'candidates'>('jobs');
     const [jobs, setJobs] = useState<Job[]>([]);
+    const [industries, setIndustries] = useState<Industry[]>([]); // New State
     const [isLoading, setIsLoading] = useState(false);
 
     // Dialog State
@@ -72,36 +84,42 @@ const RecruiterDashboard: React.FC = () => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [requirements, setRequirements] = useState('');
+
+    // New Fields State
+    const [selectedIndustry, setSelectedIndustry] = useState<string>(''); // Storing ID as string for Select
+    const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>([]);
+    const [location, setLocation] = useState('');
+    const [salaryMin, setSalaryMin] = useState<string>('');
+    const [salaryMax, setSalaryMax] = useState<string>('');
+    const [isNegotiable, setIsNegotiable] = useState(false);
+
     const [file, setFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fetchJobs = async () => {
         setIsLoading(true);
         try {
-            const response = await api.get('/api/v1/jobs/');
-            setJobs(response.data);
+            const [jobsRes, industriesRes] = await Promise.all([
+                api.get('/api/v1/jobs/'),
+                api.get('/api/v1/industries')
+            ]);
+            setJobs(jobsRes.data);
+            setIndustries(industriesRes.data);
         } catch (error) {
-            console.error('Failed to fetch jobs:', error);
-            toast.error('Không thể tải danh sách công việc');
+            console.error('Failed to fetch data:', error);
+            toast.error('Không thể tải dữ liệu');
         } finally {
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        if (activeTab === 'jobs') {
-            fetchJobs();
-        }
-    }, [activeTab]);
+        fetchJobs();
+    }, []);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            const selectedFile = e.target.files[0];
-            if (selectedFile.type !== 'application/pdf') {
-                toast.error('Chỉ chấp nhận file PDF');
-                return;
-            }
-            setFile(selectedFile);
+            setFile(e.target.files[0]);
         }
     };
 
@@ -109,22 +127,37 @@ const RecruiterDashboard: React.FC = () => {
         setTitle('');
         setDescription('');
         setRequirements('');
+
+        // Reset New Fields
+        setSelectedIndustry('');
+        setSelectedJobTypes([]);
+        setLocation('');
+        setSalaryMin('');
+        setSalaryMax('');
+        setIsNegotiable(false);
+
         setFile(null);
         setIsEditing(false);
         setIsReadOnly(false);
         setCurrentJobId(null);
     };
 
-    const handleCreate = () => {
-        resetForm();
-        setIsDialogOpen(true);
-    };
+    // ... handleCreate ...
 
     const handleEdit = (job: Job) => {
         setTitle(job.title);
         setDescription(job.description);
         setRequirements(job.requirements);
-        setFile(null); // Reset file, optional to update
+
+        // Populate New Fields
+        setSelectedIndustry(job.industry_id ? job.industry_id.toString() : '');
+        setSelectedJobTypes(job.job_type || []);
+        setLocation(job.location || '');
+        setSalaryMin(job.salary_min ? job.salary_min.toString() : '');
+        setSalaryMax(job.salary_max ? job.salary_max.toString() : '');
+        setIsNegotiable(job.salary_min === 0); // Assuming 0 implies negotiable based on my quick fix in migration
+
+        setFile(null);
         setCurrentJobId(job.id);
         setIsEditing(true);
         setIsReadOnly(false);
@@ -135,6 +168,15 @@ const RecruiterDashboard: React.FC = () => {
         setTitle(job.title);
         setDescription(job.description);
         setRequirements(job.requirements);
+
+        // Populate New Fields for View
+        setSelectedIndustry(job.industry_id ? job.industry_id.toString() : '');
+        setSelectedJobTypes(job.job_type || []);
+        setLocation(job.location || '');
+        setSalaryMin(job.salary_min ? job.salary_min.toString() : '');
+        setSalaryMax(job.salary_max ? job.salary_max.toString() : '');
+        setIsNegotiable(job.salary_min === 0);
+
         setFile(null);
         setIsReadOnly(true);
         setIsDialogOpen(true);
@@ -162,8 +204,15 @@ const RecruiterDashboard: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title || !description || !requirements) {
-            toast.error('Vui lòng điền đầy đủ thông tin');
+
+        // Validation
+        if (!title || !description || !requirements || !location || !selectedIndustry) {
+            toast.error('Vui lòng điền đầy đủ các thông tin bắt buộc');
+            return;
+        }
+
+        if (selectedJobTypes.length === 0) {
+            toast.error('Vui lòng chọn ít nhất 1 loại hình làm việc');
             return;
         }
 
@@ -173,15 +222,27 @@ const RecruiterDashboard: React.FC = () => {
             return;
         }
 
+        const salary_min = isNegotiable ? 0 : (parseInt(salaryMin) || 0);
+        const salary_max = isNegotiable ? null : (parseInt(salaryMax) || null);
+
+        const jobPayload = {
+            title,
+            description,
+            requirements,
+            industry_id: parseInt(selectedIndustry),
+            job_type: selectedJobTypes,
+            location,
+            salary_min,
+            salary_max,
+            currency: 'VND', // Default
+            experience_level: null // Optional for now
+        };
+
         setIsSubmitting(true);
         try {
             if (isEditing && currentJobId) {
                 // Update Job
-                await api.put(`/api/v1/jobs/${currentJobId}`, {
-                    title,
-                    description,
-                    requirements
-                });
+                await api.put(`/api/v1/jobs/${currentJobId}`, jobPayload);
 
                 // If file provided during edit, upload it
                 if (file) {
@@ -194,8 +255,7 @@ const RecruiterDashboard: React.FC = () => {
                 toast.success('Cập nhật tin tuyển dụng thành công!');
             } else {
                 // Create Job
-                const jobData = { title, description, requirements };
-                const jobResponse = await api.post('/api/v1/jobs/', jobData);
+                const jobResponse = await api.post('/api/v1/jobs/', jobPayload);
                 const newJobId = jobResponse.data.id;
 
                 // Upload Script
@@ -218,6 +278,15 @@ const RecruiterDashboard: React.FC = () => {
             toast.error('Có lỗi xảy ra');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Helper for Job Type Checkbox
+    const toggleJobType = (type: string) => {
+        if (selectedJobTypes.includes(type)) {
+            setSelectedJobTypes(selectedJobTypes.filter(t => t !== type));
+        } else {
+            setSelectedJobTypes([...selectedJobTypes, type]);
         }
     };
 
@@ -246,7 +315,7 @@ const RecruiterDashboard: React.FC = () => {
         <DashboardLayout>
             <div className="flex flex-col md:flex-row gap-6">
                 {/* Mobile/Desktop Tabs Navigation */}
-                {/* <div className="w-full md:w-64 flex-shrink-0 space-y-2">
+                <div className="w-full md:w-64 flex-shrink-0 space-y-2 hidden md:block">
                     <div className="bg-white p-4 rounded-lg shadow-sm border">
                         <h2 className="font-semibold text-lg mb-4 px-2">Menu</h2>
                         <nav className="space-y-1">
@@ -254,7 +323,7 @@ const RecruiterDashboard: React.FC = () => {
                             <SidebarItem id="candidates" label="Ứng viên" icon={Users} />
                         </nav>
                     </div>
-                </div> */}
+                </div>
 
                 {/* Main Content Area */}
                 <div className="flex-1">
@@ -266,25 +335,30 @@ const RecruiterDashboard: React.FC = () => {
                                     <p className="text-muted-foreground">Quản lý các vị trí đang tuyển dụng</p>
                                 </div>
 
-                                <Button onClick={handleCreate}>
+                                <Button onClick={() => {
+                                    resetForm();
+                                    setIsDialogOpen(true);
+                                }}>
                                     <Plus className="w-4 h-4 mr-2" />
                                     Tạo Tin Tuyển Dụng
                                 </Button>
+                            </div>
 
-                                {/* Create/Edit/View Dialog */}
-                                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                                    <DialogContent className="sm:max-w-[600px]">
-                                        <DialogHeader>
-                                            <DialogTitle>
-                                                {isReadOnly ? 'Chi Tiết Tin Tuyển Dụng' : isEditing ? 'Sửa Tin Tuyển Dụng' : 'Tạo Tin Tuyển Dụng Mới'}
-                                            </DialogTitle>
-                                            <DialogDescription>
-                                                {isReadOnly ? 'Xem thông tin chi tiết.' : 'Điền thông tin chi tiết và upload kịch bản phỏng vấn.'}
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                            {/* Create/Edit/View Dialog */}
+                            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                                <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+                                    <DialogHeader>
+                                        <DialogTitle>
+                                            {isReadOnly ? 'Chi Tiết Tin Tuyển Dụng' : isEditing ? 'Sửa Tin Tuyển Dụng' : 'Tạo Tin Tuyển Dụng Mới'}
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            {isReadOnly ? 'Xem thông tin chi tiết.' : 'Điền thông tin chi tiết và upload kịch bản phỏng vấn.'}
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <Label htmlFor="title">Tiêu đề công việc</Label>
+                                                <Label htmlFor="title">Tiêu đề công việc <span className="text-red-500">*</span></Label>
                                                 <Input
                                                     id="title"
                                                     value={title}
@@ -295,76 +369,158 @@ const RecruiterDashboard: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="description">Mô tả công việc</Label>
-                                                <textarea
-                                                    id="description"
-                                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    value={description}
-                                                    onChange={(e) => setDescription(e.target.value)}
-                                                    placeholder="Mô tả chi tiết..."
+                                                <Label htmlFor="industry">Ngành nghề <span className="text-red-500">*</span></Label>
+                                                <select
+                                                    id="industry"
+                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    value={selectedIndustry}
+                                                    onChange={(e) => setSelectedIndustry(e.target.value)}
+                                                    disabled={isReadOnly}
+                                                    required
+                                                >
+                                                    <option value="">Chọn ngành nghề</option>
+                                                    {industries.map(ind => (
+                                                        <option key={ind.id} value={ind.id}>{ind.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Loại hình làm việc <span className="text-red-500">*</span></Label>
+                                            <div className="flex gap-4 flex-wrap">
+                                                {['FULL_TIME', 'PART_TIME', 'REMOTE', 'HYBRID', 'CONTRACT'].map(type => (
+                                                    <label key={type} className="flex items-center space-x-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            value={type}
+                                                            checked={selectedJobTypes.includes(type)}
+                                                            onChange={() => toggleJobType(type)}
+                                                            disabled={isReadOnly}
+                                                            className="rounded border-gray-300 text-primary shadow-sm focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50"
+                                                        />
+                                                        <span className="text-sm capitalize">{type.replace('_', ' ')}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="location">Địa điểm <span className="text-red-500">*</span></Label>
+                                                <Input
+                                                    id="location"
+                                                    value={location}
+                                                    onChange={(e) => setLocation(e.target.value)}
+                                                    placeholder="VD: Hà Nội"
                                                     required
                                                     disabled={isReadOnly}
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="requirements">Yêu cầu ứng viên</Label>
-                                                <textarea
-                                                    id="requirements"
-                                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                                    value={requirements}
-                                                    onChange={(e) => setRequirements(e.target.value)}
-                                                    placeholder="Các kỹ năng cần thiết..."
-                                                    required
-                                                    disabled={isReadOnly}
-                                                />
-                                            </div>
-                                            {!isReadOnly && (
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="script">Kịch bản phỏng vấn (PDF)</Label>
-                                                    <Input
-                                                        id="script"
-                                                        type="file"
-                                                        accept="application/pdf"
-                                                        onChange={handleFileChange}
-                                                        required={!isEditing} // Required only for new jobs
-                                                    />
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {isEditing ? 'Upload file mới nếu muốn thay đổi.' : 'File PDF chứa các câu hỏi và tiêu chí đánh giá cho AI.'}
-                                                    </p>
+                                                <Label>Mức lương (VNĐ)</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <label className="flex items-center space-x-2 text-sm text-muted-foreground whitespace-nowrap">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isNegotiable}
+                                                            onChange={(e) => setIsNegotiable(e.target.checked)}
+                                                            disabled={isReadOnly}
+                                                        />
+                                                        <span>Thỏa thuận</span>
+                                                    </label>
                                                 </div>
-                                            )}
-                                            <DialogFooter>
-                                                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                                    {isReadOnly ? 'Đóng' : 'Hủy'}
-                                                </Button>
-                                                {!isReadOnly && (
-                                                    <Button type="submit" disabled={isSubmitting}>
-                                                        {isSubmitting ? 'Đang xử lý...' : (isEditing ? 'Cập nhật' : 'Tạo tin tuyển dụng')}
-                                                    </Button>
+                                                {!isNegotiable && (
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            placeholder="Min"
+                                                            type="number"
+                                                            value={salaryMin}
+                                                            onChange={e => setSalaryMin(e.target.value)}
+                                                            disabled={isReadOnly}
+                                                        />
+                                                        <Input
+                                                            placeholder="Max"
+                                                            type="number"
+                                                            value={salaryMax}
+                                                            onChange={e => setSalaryMax(e.target.value)}
+                                                            disabled={isReadOnly}
+                                                        />
+                                                    </div>
                                                 )}
-                                            </DialogFooter>
-                                        </form>
-                                    </DialogContent>
-                                </Dialog>
+                                            </div>
+                                        </div>
 
-                                {/* Delete Alert Dialog */}
-                                <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Bạn có chắc chắn muốn xóa?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Hành động này không thể hoàn tác. Tin tuyển dụng và tất cả dữ liệu phỏng vấn liên quan sẽ bị xóa vĩnh viễn.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Hủy</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
-                                                Xóa
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="description">Mô tả công việc <span className="text-red-500">*</span></Label>
+                                            <textarea
+                                                id="description"
+                                                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                value={description}
+                                                onChange={(e) => setDescription(e.target.value)}
+                                                placeholder="Mô tả chi tiết..."
+                                                required
+                                                disabled={isReadOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="requirements">Yêu cầu ứng viên <span className="text-red-500">*</span></Label>
+                                            <textarea
+                                                id="requirements"
+                                                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                value={requirements}
+                                                onChange={(e) => setRequirements(e.target.value)}
+                                                placeholder="Các kỹ năng cần thiết..."
+                                                required
+                                                disabled={isReadOnly}
+                                            />
+                                        </div>
+                                        {!isReadOnly && (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="script">Kịch bản phỏng vấn (PDF)</Label>
+                                                <Input
+                                                    id="script"
+                                                    type="file"
+                                                    accept="application/pdf"
+                                                    onChange={handleFileChange}
+                                                    required={!isEditing}
+                                                />
+                                                <p className="text-xs text-muted-foreground">
+                                                    {isEditing ? 'Upload file mới nếu muốn thay đổi.' : 'File PDF chứa các câu hỏi và tiêu chí đánh giá cho AI.'}
+                                                </p>
+                                            </div>
+                                        )}
+                                        <DialogFooter>
+                                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                                {isReadOnly ? 'Đóng' : 'Hủy'}
+                                            </Button>
+                                            {!isReadOnly && (
+                                                <Button type="submit" disabled={isSubmitting}>
+                                                    {isSubmitting ? 'Đang xử lý...' : (isEditing ? 'Cập nhật' : 'Tạo tin tuyển dụng')}
+                                                </Button>
+                                            )}
+                                        </DialogFooter>
+                                    </form>
+                                </DialogContent>
+                            </Dialog>
+
+                            {/* Delete Alert Dialog */}
+                            <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Bạn có chắc chắn muốn xóa?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Hành động này không thể hoàn tác. Tin tuyển dụng và tất cả dữ liệu phỏng vấn liên quan sẽ bị xóa vĩnh viễn.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
+                                            Xóa
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
 
                             <div className="border rounded-md">
                                 <Table>

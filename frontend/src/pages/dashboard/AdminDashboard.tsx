@@ -48,6 +48,17 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Plus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // --- Types ---
@@ -90,10 +101,20 @@ interface Job {
     };
 }
 
+// --- Types ---
+// ... existing types ...
+interface Industry {
+    id: number;
+    name: string;
+    slug: string;
+    created_at: string;
+}
+
 const AdminDashboard: React.FC = () => {
     const [stats, setStats] = useState<AdminStats | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [jobs, setJobs] = useState<Job[]>([]);
+    const [industries, setIndustries] = useState<Industry[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     // Delete State
@@ -102,28 +123,38 @@ const AdminDashboard: React.FC = () => {
     const [isAlertOpen, setIsAlertOpen] = useState(false);
     const [isJobAlertOpen, setIsJobAlertOpen] = useState(false);
 
-    // Mock Data for Chart
+    // Industry Create State
+    const [isIndustryDialogOpen, setIsIndustryDialogOpen] = useState(false);
+    const [newIndustryName, setNewIndustryName] = useState('');
+    const [newIndustrySlug, setNewIndustrySlug] = useState('');
+
+    // Mock data for the chart
     const activityData = [
         { name: 'T2', jobs: 4, interviews: 2 },
         { name: 'T3', jobs: 3, interviews: 5 },
-        { name: 'T4', jobs: 2, interviews: 8 },
-        { name: 'T5', jobs: 6, interviews: 4 },
-        { name: 'T6', jobs: 8, interviews: 3 },
-        { name: 'T7', jobs: 1, interviews: 1 },
+        { name: 'T4', jobs: 7, interviews: 8 },
+        { name: 'T5', jobs: 2, interviews: 4 },
+        { name: 'T6', jobs: 5, interviews: 6 },
+        { name: 'T7', jobs: 1, interviews: 2 },
         { name: 'CN', jobs: 0, interviews: 0 },
     ];
+
+    // Mock Data for Chart
+    // ...
 
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [statsRes, usersRes, jobsRes] = await Promise.all([
+            const [statsRes, usersRes, jobsRes, industriesRes] = await Promise.all([
                 api.get('/api/v1/admin/stats'),
                 api.get('/api/v1/admin/users'),
-                api.get('/api/v1/admin/jobs')
+                api.get('/api/v1/admin/jobs'),
+                api.get('/api/v1/industries') // New fetch
             ]);
             setStats(statsRes.data);
             setUsers(usersRes.data);
             setJobs(jobsRes.data);
+            setIndustries(industriesRes.data);
         } catch (error) {
             console.error('Failed to fetch admin data:', error);
             toast.error('Không thể tải dữ liệu Admin');
@@ -136,7 +167,29 @@ const AdminDashboard: React.FC = () => {
         fetchData();
     }, []);
 
-    // --- User Delete Handlers ---
+    // --- Industry Handlers ---
+    const handleCreateIndustry = async () => {
+        if (!newIndustryName || !newIndustrySlug) {
+            toast.error('Vui lòng nhập tên và slug');
+            return;
+        }
+        try {
+            await api.post('/api/v1/industries/', {
+                name: newIndustryName,
+                slug: newIndustrySlug
+            });
+            toast.success('Thêm ngành nghề thành công');
+            setIsIndustryDialogOpen(false);
+            setNewIndustryName('');
+            setNewIndustrySlug('');
+            fetchData();
+        } catch (error) {
+            console.error('Error creating industry:', error);
+            toast.error('Lỗi khi tạo ngành nghề. Slug có thể đã tồn tại.');
+        }
+    };
+
+    // --- User Handlers ---
     const handleDeleteUserClick = (user: User) => {
         setUserToDelete(user);
         setIsAlertOpen(true);
@@ -146,18 +199,18 @@ const AdminDashboard: React.FC = () => {
         if (!userToDelete) return;
         try {
             await api.delete(`/api/v1/admin/users/${userToDelete.id}`);
-            toast.success(`Đã xóa user ${userToDelete.email}`);
-            fetchData(); // Reload data
+            toast.success('Đã xóa người dùng');
+            fetchData();
         } catch (error) {
             console.error('Error deleting user:', error);
-            toast.error('Lỗi khi xóa user');
+            toast.error('Lỗi khi xóa người dùng');
         } finally {
             setIsAlertOpen(false);
             setUserToDelete(null);
         }
     };
 
-    // --- Job Delete Handlers ---
+    // --- Job Handlers ---
     const handleDeleteJobClick = (job: Job) => {
         setJobToDelete(job);
         setIsJobAlertOpen(true);
@@ -167,11 +220,11 @@ const AdminDashboard: React.FC = () => {
         if (!jobToDelete) return;
         try {
             await api.delete(`/api/v1/admin/jobs/${jobToDelete.id}`);
-            toast.success(`Đã xóa job #${jobToDelete.id}`);
-            fetchData(); // Reload data
+            toast.success('Đã xóa tin tuyển dụng');
+            fetchData();
         } catch (error) {
             console.error('Error deleting job:', error);
-            toast.error('Lỗi khi xóa job');
+            toast.error('Lỗi khi xóa tin tuyển dụng');
         } finally {
             setIsJobAlertOpen(false);
             setJobToDelete(null);
@@ -312,6 +365,7 @@ const AdminDashboard: React.FC = () => {
                     <TabsList>
                         <TabsTrigger value="users">Danh sách người dùng</TabsTrigger>
                         <TabsTrigger value="jobs">Danh sách bài viết</TabsTrigger>
+                        <TabsTrigger value="industries">Danh sách ngành nghề</TabsTrigger>
                     </TabsList>
 
                     {/* Users Tab */}
@@ -387,6 +441,7 @@ const AdminDashboard: React.FC = () => {
 
                     {/* Jobs Tab */}
                     <TabsContent value="jobs">
+                        {/* ... Existing Jobs Tab Content ... */}
                         <Card>
                             <CardHeader>
                                 <CardTitle>Danh sách bài viết</CardTitle>
@@ -413,12 +468,7 @@ const AdminDashboard: React.FC = () => {
                                                 <TableRow key={job.id}>
                                                     <TableCell className="font-medium">#{job.id}</TableCell>
                                                     <TableCell className="font-medium">{job.title}</TableCell>
-                                                    <TableCell>
-                                                        {/* Note: We might need to populate recruiter info in backend or fetch separately. 
-                                                    For now assuming basic job info. If recruiter info is missing, we show ID.
-                                                 */}
-                                                        {job.recruiter_id}
-                                                    </TableCell>
+                                                    <TableCell>{job.recruiter_id}</TableCell>
                                                     <TableCell>
                                                         {new Date(job.created_at).toLocaleDateString('vi-VN')}
                                                     </TableCell>
@@ -431,6 +481,56 @@ const AdminDashboard: React.FC = () => {
                                                         >
                                                             <Trash className="h-4 w-4" />
                                                         </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Industries Tab */}
+                    <TabsContent value="industries">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-semibold">Danh mục ngành nghề</h2>
+                            <Button onClick={() => setIsIndustryDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Thêm ngành nghề
+                            </Button>
+                        </div>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Danh sách ngành nghề</CardTitle>
+                                <CardDescription>Quản lý các ngành nghề trong hệ thống.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>ID</TableHead>
+                                            <TableHead>Tên ngành</TableHead>
+                                            <TableHead>Slug</TableHead>
+                                            <TableHead>Ngày tạo</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="text-center py-8">Đang tải...</TableCell>
+                                            </TableRow>
+                                        ) : industries.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="text-center py-8">Chưa có dữ liệu</TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            industries.map((industry) => (
+                                                <TableRow key={industry.id}>
+                                                    <TableCell className="font-medium">#{industry.id}</TableCell>
+                                                    <TableCell>{industry.name}</TableCell>
+                                                    <TableCell>{industry.slug}</TableCell>
+                                                    <TableCell>
+                                                        {new Date(industry.created_at).toLocaleDateString('vi-VN')}
                                                     </TableCell>
                                                 </TableRow>
                                             ))
@@ -462,7 +562,10 @@ const AdminDashboard: React.FC = () => {
                 </AlertDialog>
 
                 {/* Delete Job Alert Dialog */}
+                {/* Delete Job Alert Dialog */}
+                {/* ... existing alert ... */}
                 <AlertDialog open={isJobAlertOpen} onOpenChange={setIsJobAlertOpen}>
+                    {/* ... content ... */}
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Xác nhận xóa bài viết?</AlertDialogTitle>
@@ -479,6 +582,44 @@ const AdminDashboard: React.FC = () => {
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
+
+                {/* Create Industry Dialog */}
+                <Dialog open={isIndustryDialogOpen} onOpenChange={setIsIndustryDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Thêm Ngành Nghề</DialogTitle>
+                            <DialogDescription>Nhập tên và slug cho ngành nghề mới.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="ind-name">Tên ngành</Label>
+                                <Input
+                                    id="ind-name"
+                                    value={newIndustryName}
+                                    onChange={(e) => {
+                                        setNewIndustryName(e.target.value);
+                                        // Auto-generate slug simple version
+                                        setNewIndustrySlug(e.target.value.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, ''));
+                                    }}
+                                    placeholder="VD: Công nghệ thông tin"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="ind-slug">Slug</Label>
+                                <Input
+                                    id="ind-slug"
+                                    value={newIndustrySlug}
+                                    onChange={(e) => setNewIndustrySlug(e.target.value)}
+                                    placeholder="cong-nghe-thong-tin"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsIndustryDialogOpen(false)}>Hủy</Button>
+                            <Button onClick={handleCreateIndustry}>Thêm</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </DashboardLayout>
     );
