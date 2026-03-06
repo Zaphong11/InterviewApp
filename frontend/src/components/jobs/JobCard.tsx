@@ -11,13 +11,14 @@ export interface Job {
     requirements: string;
     created_at: string;
     job_type?: string[] | string;
-    industry?: string;
+    industry?: any;
     salary_min?: number;
     salary_max?: number;
     currency?: string;
     location?: string;
     experience_level?: string;
     candidate_count?: number;
+    company?: any;
 }
 
 interface JobCardProps {
@@ -59,9 +60,14 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick }) => {
         >
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                        <CardTitle className="text-xl font-bold leading-tight">{job.title}</CardTitle>
-                        <CardDescription className="flex flex-wrap items-center gap-3 text-sm">
+                    <div className="space-y-1 flex-1 pr-4">
+                        <CardTitle className="text-xl font-bold leading-tight text-gray-900 group-hover:text-primary transition-colors">{job.title}</CardTitle>
+                        {job.company?.name && (
+                            <div className="text-[15px] font-medium text-gray-700">
+                                {job.company.name}
+                            </div>
+                        )}
+                        <CardDescription className="flex flex-wrap items-center gap-3 text-sm pt-1">
                             <span className="flex items-center gap-1 text-muted-foreground">
                                 <Clock className="w-3.5 h-3.5" />
                                 {new Date(job.created_at).toLocaleDateString('vi-VN')}
@@ -75,14 +81,22 @@ export const JobCard: React.FC<JobCardProps> = ({ job, onClick }) => {
                             {job.industry && (
                                 <span className="flex items-center gap-1 text-muted-foreground">
                                     <Briefcase className="w-3.5 h-3.5" />
-                                    {job.industry}
+                                    {typeof job.industry === 'string' ? job.industry : job.industry.name}
                                 </span>
                             )}
                         </CardDescription>
                     </div>
                     {/* Placeholder for company logo or icon */}
-                    <div className="p-3 bg-primary/5 rounded-xl hidden sm:block">
-                        <Briefcase className="w-8 h-8 text-primary" />
+                    <div className="p-3 bg-white border border-gray-100 shadow-sm rounded-xl hidden sm:flex items-center justify-center w-14 h-14 overflow-hidden">
+                        {job.company?.logo_url ? (
+                            <img
+                                src={job.company.logo_url.startsWith('http') ? job.company.logo_url : `http://localhost:8000${job.company.logo_url}`}
+                                alt={job.company.name || job.title}
+                                className="w-full h-full object-contain"
+                            />
+                        ) : (
+                            <Briefcase className="w-7 h-7 text-primary/50" />
+                        )}
                     </div>
                 </div>
             </CardHeader>

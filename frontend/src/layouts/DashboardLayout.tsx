@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Building2 } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -106,6 +106,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                                             <User className="mr-2 h-4 w-4" />
                                             <span>Hồ sơ cá nhân</span>
                                         </DropdownMenuItem>
+                                        {user.role === 'business' && (
+                                            <DropdownMenuItem onClick={() => navigate('/company-profile')}>
+                                                <Building2 className="mr-2 h-4 w-4" />
+                                                <span>Hồ sơ công ty</span>
+                                            </DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
                                             <LogOut className="mr-2 h-4 w-4" />
                                             <span>Đăng xuất</span>

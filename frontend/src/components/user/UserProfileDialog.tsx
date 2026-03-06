@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { Loader2, FileText, Upload, ExternalLink } from 'lucide-react';
+import { Loader2, FileText, Upload, ExternalLink, Building2 } from 'lucide-react';
 
 interface UserProfileDialogProps {
     isOpen: boolean;
@@ -15,6 +16,7 @@ interface UserProfileDialogProps {
 
 export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ isOpen, onClose }) => {
     const { user, refreshProfile } = useAuth();
+    const navigate = useNavigate();
     const [isUploading, setIsUploading] = useState(false);
     const [isEditingCv, setIsEditingCv] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +76,25 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ isOpen, on
                         <Label className="text-right">Email</Label>
                         <Input value={user.email} disabled className="col-span-3" />
                     </div>
+
+                    {user.role === 'business' && (
+                        <div className="grid grid-cols-4 items-start gap-4 pt-4 border-t">
+                            <Label className="text-right pt-2">Công ty</Label>
+                            <div className="col-span-3">
+                                <Button
+                                    variant="outline"
+                                    className="w-full justify-start text-left bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
+                                    onClick={() => {
+                                        onClose();
+                                        navigate('/company-profile');
+                                    }}
+                                >
+                                    <Building2 className="mr-2 h-4 w-4" />
+                                    Cập nhật Hồ sơ Công ty
+                                </Button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-4 items-start gap-4 pt-4 border-t">
                         <Label className="text-right pt-2">CV</Label>

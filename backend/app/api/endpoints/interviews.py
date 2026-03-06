@@ -63,6 +63,24 @@ def start_interview(
     if not job.questions_template:
         raise HTTPException(status_code=400, detail="Job does not have questions template")
 
+    # 1.5 Auto-create an Application for ATS Board
+    from app.db.models import Application, ApplicationStage
+    
+    existing_application = db.query(Application).filter(
+        Application.job_id == request.job_id,
+        Application.candidate_id == current_user.id
+    ).first()
+    
+    if not existing_application:
+        new_app = Application(
+            job_id=job.id,
+            candidate_id=current_user.id,
+            cv_url=current_user.cv_url, # Lấy CV hiện tại trong profile của user mang sang
+            stage=ApplicationStage.SCREENING
+        )
+        db.add(new_app)
+        db.flush() # Flush để lấy ID nếu cần, commit sẽ gom chung ở dưới
+
     # 2. Map questions_template -> InterviewContent
     # questions_template là list of dict (từ JSONB)
     # Cấu trúc mong đợi của questions_template: [{"question_text": "...", "criteria": [...]}]

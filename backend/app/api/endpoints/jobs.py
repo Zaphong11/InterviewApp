@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, or_
 from app.db.session import get_db
 from app.db.models import Job, User, Role, Interview
@@ -30,6 +30,13 @@ def create_job(
          industry = db.query(Industry).filter(Industry.id == job_in.industry_id).first()
          if not industry:
              raise HTTPException(status_code=400, detail="Industry not found")
+             
+    # Validate Category
+    if hasattr(job_in, 'category_id') and job_in.category_id:
+        from app.db.models import JobCategory
+        category = db.query(JobCategory).filter(JobCategory.id == job_in.category_id).first()
+        if not category:
+            raise HTTPException(status_code=400, detail="Job Category not found")
 
     # 2. Validate Job Type (Strict check: REMOTE, PART_TIME, FULL_TIME only?)
     # User said "Allow list... Only accept 3 values".
@@ -58,6 +65,7 @@ def read_jobs(
     q: Optional[str] = None,
     job_type: Optional[List[job_schema.JobType]] = Query(None),
     industry: Optional[str] = None,
+    category_id: Optional[int] = Query(None),
     min_salary: Optional[int] = Query(None, alias="min_salary"),
     location: Optional[str] = None,
 ):
@@ -67,6 +75,10 @@ def read_jobs(
     query = db.query(
         Job,
         func.count(Interview.id).label("candidate_count")
+    ).options(
+        selectinload(Job.company),
+        selectinload(Job.industry_rel),
+        selectinload(Job.category)
     ).outerjoin(Interview, Job.id == Interview.job_id)
 
     if current_user and current_user.role == Role.BUSINESS:
@@ -92,15 +104,12 @@ def read_jobs(
             query = query.filter(Job.industry_id == ind_id)
         except ValueError:
             pass # Invalid ID format, ignore filter
+            
+    if category_id:
+        query = query.filter(Job.category_id == category_id)
 
     
     if min_salary:
-        # Filter jobs where max_salary >= min_salary (if exists) or salary_min >= min_salary
-        # Simplest logic: Check if provided salary range overlaps or meets expectation.
-        # Let's assume user wants jobs that pay AT LEAST min_salary eventually.
-        # So we check if salary_max (potential) >= min_salary. 
-        # If salary_max is NULL (agreement), we might include or exclude based on policy.
-        # Here: we filter if salary_min >= min_salary requested.
         query = query.filter(Job.salary_min >= min_salary)
         
     if location:
@@ -111,10 +120,8 @@ def read_jobs(
     # Map results to Job schema with candidate_count
     jobs_with_count = []
     for job, count in results:
-        # Create a dict from job object and add candidate_count
-        job_data = job.__dict__
-        job_data["candidate_count"] = count
-        jobs_with_count.append(job_data)
+        job.candidate_count = count
+        jobs_with_count.append(job)
 
     return jobs_with_count
 

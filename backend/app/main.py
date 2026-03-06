@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.api.endpoints import auth, jobs, interviews, tts, admin, users, industries
+from app.api.endpoints import auth, jobs, interviews, tts, admin, users, industries, job_categories, companies, applications, upload
 from app.db.models import Base
 from app.db.session import engine
 from app.db.models import User
@@ -49,6 +49,10 @@ app.include_router(interviews.router, prefix="/api/v1/interviews", tags=["Interv
 app.include_router(tts.router, prefix="/api/v1/tts", tags=["TTS"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(industries.router, prefix="/api/v1/industries", tags=["Industries"])
+app.include_router(job_categories.router, prefix="/api/v1/job-categories", tags=["Job Categories"])
+app.include_router(companies.router, prefix="/api/v1/companies", tags=["Companies"])
+app.include_router(applications.router, prefix="/api/v1/applications", tags=["Applications"])
+app.include_router(upload.router, prefix="/api/v1/upload", tags=["Uploads"])
 
 # --- Ví dụ về Endpoint được bảo vệ bằng Phân quyền ---
 from fastapi import Depends, APIRouter

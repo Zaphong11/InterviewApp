@@ -10,6 +10,7 @@ export interface FilterState {
     q: string;
     location: string;
     industry: string;
+    category_id: string; // New field
     job_type: string[];
     min_salary: number | '';
 }
@@ -20,6 +21,11 @@ interface JobFilterSidebarProps {
 }
 
 interface Industry {
+    id: number;
+    name: string;
+}
+
+interface JobCategory {
     id: number;
     name: string;
 }
@@ -46,22 +52,28 @@ export const JobFilterSidebar: React.FC<JobFilterSidebarProps> = ({ onFilterChan
         q: '',
         location: '',
         industry: '',
+        category_id: '',
         job_type: [],
         min_salary: ''
     });
 
     const [industries, setIndustries] = useState<Industry[]>([]);
+    const [categories, setCategories] = useState<JobCategory[]>([]);
 
     useEffect(() => {
-        const fetchIndustries = async () => {
+        const fetchFiltersData = async () => {
             try {
-                const response = await api.get('/api/v1/industries');
-                setIndustries(response.data);
+                const [indRes, catRes] = await Promise.all([
+                    api.get('/api/v1/industries'),
+                    api.get('/api/v1/job-categories')
+                ]);
+                setIndustries(indRes.data);
+                setCategories(catRes.data);
             } catch (error) {
-                console.error('Failed to fetch industries:', error);
+                console.error('Failed to fetch filters data:', error);
             }
         };
-        fetchIndustries();
+        fetchFiltersData();
     }, []);
 
     const handleChange = (key: keyof FilterState, value: any) => {
@@ -90,6 +102,7 @@ export const JobFilterSidebar: React.FC<JobFilterSidebarProps> = ({ onFilterChan
             q: '',
             location: '',
             industry: '',
+            category_id: '',
             job_type: [],
             min_salary: ''
         };
@@ -152,6 +165,26 @@ export const JobFilterSidebar: React.FC<JobFilterSidebarProps> = ({ onFilterChan
                             <option value="">Tất cả ngành nghề</option>
                             {industries.map(ind => (
                                 <option key={ind.id} value={ind.id.toString()}>{ind.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                {/* Job Category - Native Select */}
+                <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                        <Briefcase className="w-4 h-4" />
+                        Mảng nghiệp vụ
+                    </Label>
+                    <div className="relative">
+                        <select
+                            className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            value={filters.category_id}
+                            onChange={(e) => handleChange('category_id', e.target.value)}
+                        >
+                            <option value="">Tất cả tính chuyên môn</option>
+                            {categories.map(cat => (
+                                <option key={cat.id} value={cat.id.toString()}>{cat.name}</option>
                             ))}
                         </select>
                     </div>

@@ -7,9 +7,10 @@ import Home from "@/pages/Home"
 
 import RecruiterDashboard from "@/pages/dashboard/RecruiterDashboard"
 import CandidateDashboard from "@/pages/dashboard/CandidateDashboard"
-import JobCandidates from "@/pages/dashboard/JobCandidates"
+import ATSDashboard from "@/pages/dashboard/ATSDashboard"
 import InterviewReport from "@/pages/dashboard/InterviewReport"
 import AdminDashboard from "@/pages/dashboard/AdminDashboard"
+import CompanyProfile from "@/pages/dashboard/CompanyProfile"
 
 import InterviewRoom from "@/pages/interview/InterviewRoom"
 
@@ -27,10 +28,10 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Protected Routes - Business */}
         <Route element={<ProtectedRoute allowedRoles={['business']} />}>
           <Route path="/dashboard" element={<RecruiterDashboard />} />
-          <Route path="/jobs/:jobId/candidates" element={<JobCandidates />} />
+          <Route path="/company-profile" element={<CompanyProfile />} />
+          <Route path="/jobs/:jobId/candidates" element={<ATSDashboard />} />
           <Route path="/interview-report/:interviewId" element={<InterviewReport />} />
         </Route>
 
