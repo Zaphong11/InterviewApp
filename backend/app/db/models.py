@@ -56,11 +56,33 @@ class ExperienceLevel(str, enum.Enum):
     SENIOR = "SENIOR"
     MANAGER = "MANAGER"
 
+class ApplicationStage(str, enum.Enum):
+    SCREENING = "SCREENING"
+    TEST = "TEST"
+    INTERVIEW = "INTERVIEW"
+    OFFER = "OFFER"
+
 # Cập nhật lại Job Model
 # Lưu ý: Cần thêm các cột mới vào bảng jobs trong DB nếu bảng đã tồn tại!
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 
 # ... imports ...
+
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    name = Column(String, nullable=False)
+    logo_url = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    website = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    owner = relationship("User", backref="company")
+    jobs = relationship("Job", back_populates="company")
+
 
 class Industry(Base):
     __tablename__ = "industries"
@@ -72,6 +94,16 @@ class Industry(Base):
     
     jobs = relationship("Job", back_populates="industry_rel")
 
+class JobCategory(Base):
+    __tablename__ = "job_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    jobs = relationship("Job", back_populates="category")
+
 # ... Enums ...
 
 class Job(Base):
@@ -80,6 +112,7 @@ class Job(Base):
     id = Column(Integer, primary_key=True, index=True)
     recruiter_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     industry_id = Column(Integer, ForeignKey("industries.id"), nullable=True) # Changed from String to FK
+    category_id = Column(Integer, ForeignKey("job_categories.id"), nullable=True) # New FK for JobCategory
     
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
@@ -104,11 +137,16 @@ class Job(Base):
     currency = Column(String, default="VND")
     location = Column(String, nullable=False) # Required now
     experience_level = Column(Enum(ExperienceLevel), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
 
     # Relationships
     recruiter = relationship("User", back_populates="jobs")
+    company = relationship("Company", back_populates="jobs")
     industry_rel = relationship("Industry", back_populates="jobs") # Renamed to avoid conflict if 'industry' field existed, but we removed it.
+    category = relationship("JobCategory", back_populates="jobs")
     interviews = relationship("Interview", back_populates="job")
+    applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")
+
 
 class InterviewStatus(str, enum.Enum):
     PENDING = "pending"
@@ -139,3 +177,34 @@ class Interview(Base):
     # Relationships
     job = relationship("Job", back_populates="interviews")
     candidate = relationship("User", foreign_keys=[candidate_id], back_populates="interviews")
+
+class Application(Base):
+    __tablename__ = "applications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    candidate_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    target_role = Column(String, nullable=True)
+    cv_url = Column(String, nullable=True)
+    stage = Column(Enum(ApplicationStage), default=ApplicationStage.SCREENING, nullable=False)
+    status = Column(String, default="ACTIVE") # e.g., ACTIVE, REJECTED, HIRED
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    job = relationship("Job", back_populates="applications")
+    candidate = relationship("User", foreign_keys=[candidate_id], backref="applications")
+    notes = relationship("ApplicationNote", back_populates="application", cascade="all, delete-orphan")
+
+class ApplicationNote(Base):
+    __tablename__ = "application_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    recruiter_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    application = relationship("Application", back_populates="notes")
+    recruiter = relationship("User", foreign_keys=[recruiter_id])

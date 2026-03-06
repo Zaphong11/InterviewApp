@@ -3,7 +3,9 @@ import enum
 from pydantic import BaseModel, Field
 from datetime import datetime
 from pydantic.config import ConfigDict
-from .industry import IndustryResponse # Make sure this import works relative/absolute
+from .industry import IndustryResponse
+from .job_category import JobCategoryResponse
+from .company import Company
 
 # ... Enums are same ...
 class JobType(str, enum.Enum):
@@ -28,7 +30,8 @@ class JobBase(BaseModel):
     
     # New Fields
     job_type: Optional[List[JobType]] = None # Changed to List
-    industry_id: Optional[int] = Field(default=None, description="ID của ngành nghề") # Optional in Base
+    industry_id: Optional[int] = Field(default=None, description="ID của ngành nghề (old)") # Optional in Base
+    category_id: Optional[int] = Field(default=None, description="ID của loại công việc mới") # Job Category
     salary_min: int # Required
     salary_max: Optional[int] = None
     currency: Optional[str] = "VND"
@@ -43,6 +46,7 @@ class JobUpdate(JobBase):
     description: Optional[str] = None
     requirements: Optional[str] = None
     questions_template: Optional[list] = None
+    category_id: Optional[int] = None
 
 class Job(JobBase):
     id: int
@@ -66,6 +70,8 @@ class Job(JobBase):
     # Let's use `industry_rel` to be safe for now, or rename in model (renaming in model is risky for Alembic if we change col name, but relationship name is Python only).
     # I'll use `industry` with alias.
     industry: Optional[IndustryResponse] = Field(default=None, validation_alias="industry_rel")
+    category: Optional[JobCategoryResponse] = None
+    company: Optional[Company] = None
 
     model_config = ConfigDict(from_attributes=True)
 

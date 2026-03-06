@@ -63,11 +63,19 @@ interface Industry {
     slug: string;
 }
 
+interface JobCategory {
+    id: number;
+    name: string;
+    description?: string;
+}
+
 const RecruiterDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'jobs' | 'candidates'>('jobs');
     const [jobs, setJobs] = useState<Job[]>([]);
     const [industries, setIndustries] = useState<Industry[]>([]); // New State
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [jobCategories, setJobCategories] = useState<JobCategory[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     // Dialog State
@@ -87,6 +95,7 @@ const RecruiterDashboard: React.FC = () => {
 
     // New Fields State
     const [selectedIndustry, setSelectedIndustry] = useState<string>(''); // Storing ID as string for Select
+    const [selectedCategory, setSelectedCategory] = useState<string>(''); // For job category
     const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>([]);
     const [location, setLocation] = useState('');
     const [salaryMin, setSalaryMin] = useState<string>('');
@@ -99,12 +108,14 @@ const RecruiterDashboard: React.FC = () => {
     const fetchJobs = async () => {
         setIsLoading(true);
         try {
-            const [jobsRes, industriesRes] = await Promise.all([
+            const [jobsRes, industriesRes, categoriesRes] = await Promise.all([
                 api.get('/api/v1/jobs/'),
-                api.get('/api/v1/industries')
+                api.get('/api/v1/industries'),
+                api.get('/api/v1/job-categories')
             ]);
             setJobs(jobsRes.data);
             setIndustries(industriesRes.data);
+            setJobCategories(categoriesRes.data);
         } catch (error) {
             console.error('Failed to fetch data:', error);
             toast.error('Không thể tải dữ liệu');
@@ -130,6 +141,7 @@ const RecruiterDashboard: React.FC = () => {
 
         // Reset New Fields
         setSelectedIndustry('');
+        setSelectedCategory('');
         setSelectedJobTypes([]);
         setLocation('');
         setSalaryMin('');
@@ -151,6 +163,7 @@ const RecruiterDashboard: React.FC = () => {
 
         // Populate New Fields
         setSelectedIndustry(job.industry_id ? job.industry_id.toString() : '');
+        setSelectedCategory((job as any).category_id ? (job as any).category_id.toString() : '');
         setSelectedJobTypes(job.job_type || []);
         setLocation(job.location || '');
         setSalaryMin(job.salary_min ? job.salary_min.toString() : '');
@@ -171,6 +184,7 @@ const RecruiterDashboard: React.FC = () => {
 
         // Populate New Fields for View
         setSelectedIndustry(job.industry_id ? job.industry_id.toString() : '');
+        setSelectedCategory((job as any).category_id ? (job as any).category_id.toString() : '');
         setSelectedJobTypes(job.job_type || []);
         setLocation(job.location || '');
         setSalaryMin(job.salary_min ? job.salary_min.toString() : '');
@@ -229,7 +243,8 @@ const RecruiterDashboard: React.FC = () => {
             title,
             description,
             requirements,
-            industry_id: parseInt(selectedIndustry),
+            industry_id: selectedIndustry ? parseInt(selectedIndustry) : null,
+            category_id: selectedCategory ? parseInt(selectedCategory) : null,
             job_type: selectedJobTypes,
             location,
             salary_min,
@@ -369,18 +384,32 @@ const RecruiterDashboard: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="industry">Ngành nghề <span className="text-red-500">*</span></Label>
+                                                <Label htmlFor="industry">Ngành nghề</Label>
                                                 <select
                                                     id="industry"
                                                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                                     value={selectedIndustry}
                                                     onChange={(e) => setSelectedIndustry(e.target.value)}
                                                     disabled={isReadOnly}
-                                                    required
                                                 >
                                                     <option value="">Chọn ngành nghề</option>
                                                     {industries.map(ind => (
                                                         <option key={ind.id} value={ind.id}>{ind.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="category">Danh mục đặc thù</Label>
+                                                <select
+                                                    id="category"
+                                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    value={selectedCategory}
+                                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                                    disabled={isReadOnly}
+                                                >
+                                                    <option value="">Chọn danh mục</option>
+                                                    {jobCategories.map(cat => (
+                                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
                                                     ))}
                                                 </select>
                                             </div>

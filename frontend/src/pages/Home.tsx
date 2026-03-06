@@ -17,6 +17,7 @@ const Home: React.FC = () => {
         q: '',
         location: '',
         industry: '',
+        category_id: '',
         job_type: [],
         min_salary: ''
     });
@@ -28,6 +29,7 @@ const Home: React.FC = () => {
             if (currentFilters.q) params.append('q', currentFilters.q);
             if (currentFilters.location) params.append('location', currentFilters.location);
             if (currentFilters.industry) params.append('industry', currentFilters.industry);
+            if (currentFilters.category_id) params.append('category_id', currentFilters.category_id);
             if (currentFilters.min_salary) params.append('min_salary', currentFilters.min_salary.toString());
 
             // Handle array for job_type
@@ -118,7 +120,7 @@ const Home: React.FC = () => {
                                 </p>
                                 <Button
                                     variant="link"
-                                    onClick={() => setFilters({ q: '', location: '', industry: '', job_type: [], min_salary: '' })}
+                                    onClick={() => setFilters({ q: '', location: '', industry: '', category_id: '', job_type: [], min_salary: '' })}
                                 >
                                     Xóa bộ lọc
                                 </Button>

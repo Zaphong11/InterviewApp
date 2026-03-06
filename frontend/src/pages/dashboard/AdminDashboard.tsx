@@ -110,11 +110,19 @@ interface Industry {
     created_at: string;
 }
 
+interface JobCategory {
+    id: number;
+    name: string;
+    description?: string;
+    created_at: string;
+}
+
 const AdminDashboard: React.FC = () => {
     const [stats, setStats] = useState<AdminStats | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [jobs, setJobs] = useState<Job[]>([]);
     const [industries, setIndustries] = useState<Industry[]>([]);
+    const [jobCategories, setJobCategories] = useState<JobCategory[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     // Delete State
@@ -123,10 +131,14 @@ const AdminDashboard: React.FC = () => {
     const [isAlertOpen, setIsAlertOpen] = useState(false);
     const [isJobAlertOpen, setIsJobAlertOpen] = useState(false);
 
-    // Industry Create State
     const [isIndustryDialogOpen, setIsIndustryDialogOpen] = useState(false);
     const [newIndustryName, setNewIndustryName] = useState('');
     const [newIndustrySlug, setNewIndustrySlug] = useState('');
+
+    // Job Category Create State
+    const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [newCategoryDesc, setNewCategoryDesc] = useState('');
 
     // Mock data for the chart
     const activityData = [
@@ -145,16 +157,18 @@ const AdminDashboard: React.FC = () => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [statsRes, usersRes, jobsRes, industriesRes] = await Promise.all([
+            const [statsRes, usersRes, jobsRes, industriesRes, categoriesRes] = await Promise.all([
                 api.get('/api/v1/admin/stats'),
                 api.get('/api/v1/admin/users'),
                 api.get('/api/v1/admin/jobs'),
-                api.get('/api/v1/industries') // New fetch
+                api.get('/api/v1/industries'),
+                api.get('/api/v1/job-categories')
             ]);
             setStats(statsRes.data);
             setUsers(usersRes.data);
             setJobs(jobsRes.data);
             setIndustries(industriesRes.data);
+            setJobCategories(categoriesRes.data);
         } catch (error) {
             console.error('Failed to fetch admin data:', error);
             toast.error('Không thể tải dữ liệu Admin');
@@ -186,6 +200,28 @@ const AdminDashboard: React.FC = () => {
         } catch (error) {
             console.error('Error creating industry:', error);
             toast.error('Lỗi khi tạo ngành nghề. Slug có thể đã tồn tại.');
+        }
+    };
+
+    // --- Job Category Handlers ---
+    const handleCreatejobCategory = async () => {
+        if (!newCategoryName) {
+            toast.error('Vui lòng nhập tên danh mục');
+            return;
+        }
+        try {
+            await api.post('/api/v1/job-categories/', {
+                name: newCategoryName,
+                description: newCategoryDesc
+            });
+            toast.success('Thêm danh mục công việc thành công');
+            setIsCategoryDialogOpen(false);
+            setNewCategoryName('');
+            setNewCategoryDesc('');
+            fetchData();
+        } catch (error: any) {
+            console.error('Error creating job category:', error);
+            toast.error(error.response?.data?.detail || 'Lỗi khi tạo danh mục công việc.');
         }
     };
 
@@ -365,7 +401,8 @@ const AdminDashboard: React.FC = () => {
                     <TabsList>
                         <TabsTrigger value="users">Danh sách người dùng</TabsTrigger>
                         <TabsTrigger value="jobs">Danh sách bài viết</TabsTrigger>
-                        <TabsTrigger value="industries">Danh sách ngành nghề</TabsTrigger>
+                        <TabsTrigger value="job_categories">Danh mục kỹ năng / chuyên môn</TabsTrigger>
+                        <TabsTrigger value="industries">Danh sách ngành nghề cũ (Industries)</TabsTrigger>
                     </TabsList>
 
                     {/* Users Tab */}
@@ -540,6 +577,55 @@ const AdminDashboard: React.FC = () => {
                             </CardContent>
                         </Card>
                     </TabsContent>
+                    {/* Job Categories Tab */}
+                    <TabsContent value="job_categories">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-semibold">Danh mục công việc đặc thù</h2>
+                            <Button onClick={() => setIsCategoryDialogOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Thêm danh mục
+                            </Button>
+                        </div>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Quản lý danh mục kỹ năng / chuyên môn</CardTitle>
+                                <CardDescription>Tạo các Job Category để nhà tuyển dụng có thể gắn vào tin, ứng viên có thể lọc.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>ID</TableHead>
+                                            <TableHead>Tên</TableHead>
+                                            <TableHead>Mô tả</TableHead>
+                                            <TableHead>Ngày tạo</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLoading ? (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="text-center py-8">Đang tải...</TableCell>
+                                            </TableRow>
+                                        ) : jobCategories.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="text-center py-8">Chưa có dữ liệu</TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            jobCategories.map((cat) => (
+                                                <TableRow key={cat.id}>
+                                                    <TableCell className="font-medium">#{cat.id}</TableCell>
+                                                    <TableCell>{cat.name}</TableCell>
+                                                    <TableCell>{cat.description || '-'}</TableCell>
+                                                    <TableCell>
+                                                        {new Date(cat.created_at).toLocaleDateString('vi-VN')}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
                 </Tabs>
 
                 {/* Delete User Alert Dialog */}
@@ -617,6 +703,40 @@ const AdminDashboard: React.FC = () => {
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsIndustryDialogOpen(false)}>Hủy</Button>
                             <Button onClick={handleCreateIndustry}>Thêm</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Create Job Category Dialog */}
+                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Thêm Danh Mục Đặc Thù</DialogTitle>
+                            <DialogDescription>Nhập tên mục mới mảng kỹ thuật hoặc nghiệp vụ. (Ví dụ: Thợ điện, Kế toán...)</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="cat-name">Tên danh mục <span className="text-red-500">*</span></Label>
+                                <Input
+                                    id="cat-name"
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    placeholder="VD: Kỹ sư cơ khí"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="cat-desc">Mô tả thêm (Không bắt buộc)</Label>
+                                <Input
+                                    id="cat-desc"
+                                    value={newCategoryDesc}
+                                    onChange={(e) => setNewCategoryDesc(e.target.value)}
+                                    placeholder="Chuyên viên xử lý nghiệp vụ chung..."
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsCategoryDialogOpen(false)}>Hủy</Button>
+                            <Button onClick={handleCreatejobCategory}>Lưu thông tin</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
