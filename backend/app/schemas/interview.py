@@ -91,6 +91,7 @@ class InterviewCandidateView(BaseModel):
 
 class InterviewListItem(BaseModel):
     id: int
+    job_id: int
     job_title: str
     created_at: datetime
     status: InterviewStatus

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, FileText, Users, MoreHorizontal, Edit, Trash, Eye } from 'lucide-react';
+import { Plus, FileText, Users, MoreHorizontal, Edit, Trash, Eye, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 import api from '@/lib/api';
@@ -42,6 +42,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { CampaignSetupModal } from '@/components/dashboard/CampaignSetupModal';
 
 interface Job {
     id: number;
@@ -83,6 +84,11 @@ const RecruiterDashboard: React.FC = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [isReadOnly, setIsReadOnly] = useState(false);
     const [currentJobId, setCurrentJobId] = useState<number | null>(null);
+
+    // Campaign Modal State
+    const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+    const [selectedCampaignJobId, setSelectedCampaignJobId] = useState<number | null>(null);
+    const [selectedCampaignJobTitle, setSelectedCampaignJobTitle] = useState<string>('');
 
     // Alert Dialog State
     const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -177,6 +183,12 @@ const RecruiterDashboard: React.FC = () => {
         setIsDialogOpen(true);
     };
 
+    const handleOpenCampaignModal = (job: Job) => {
+        setSelectedCampaignJobId(job.id);
+        setSelectedCampaignJobTitle(job.title);
+        setIsCampaignModalOpen(true);
+    };
+
     const handleViewContent = (job: Job) => {
         setTitle(job.title);
         setDescription(job.description);
@@ -230,11 +242,11 @@ const RecruiterDashboard: React.FC = () => {
             return;
         }
 
-        // If creating, file is required. If editing, file is optional.
-        if (!isEditing && !file) {
-            toast.error('Vui lòng upload kịch bản phỏng vấn (PDF)');
-            return;
-        }
+        // File is no longer required when creating or editing.
+        // if (!isEditing && !file) {
+        //     toast.error('Vui lòng upload kịch bản phỏng vấn (PDF)');
+        //     return;
+        // }
 
         const salary_min = isNegotiable ? 0 : (parseInt(salaryMin) || 0);
         const salary_max = isNegotiable ? null : (parseInt(salaryMax) || null);
@@ -506,16 +518,16 @@ const RecruiterDashboard: React.FC = () => {
                                         </div>
                                         {!isReadOnly && (
                                             <div className="space-y-2">
-                                                <Label htmlFor="script">Kịch bản phỏng vấn (PDF)</Label>
+                                                <Label htmlFor="script">Kịch bản phỏng vấn (PDF) <span className="text-muted-foreground font-normal">(Không bắt buộc)</span></Label>
                                                 <Input
                                                     id="script"
                                                     type="file"
                                                     accept="application/pdf"
                                                     onChange={handleFileChange}
-                                                    required={!isEditing}
+                                                    required={false}
                                                 />
                                                 <p className="text-xs text-muted-foreground">
-                                                    {isEditing ? 'Upload file mới nếu muốn thay đổi.' : 'File PDF chứa các câu hỏi và tiêu chí đánh giá cho AI.'}
+                                                    {isEditing ? 'Upload file mới nếu muốn thay đổi kịch bản.' : 'Tùy chọn: File PDF chứa các câu hỏi và tiêu chí đánh giá cho AI.'}
                                                 </p>
                                             </div>
                                         )}
@@ -598,6 +610,10 @@ const RecruiterDashboard: React.FC = () => {
                                                                     <Eye className="mr-2 h-4 w-4" />
                                                                     Xem nội dung
                                                                 </DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={() => handleOpenCampaignModal(job)}>
+                                                                    <Settings className="mr-2 h-4 w-4" />
+                                                                    Chiến dịch đa vòng
+                                                                </DropdownMenuItem>
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem onClick={() => handleEdit(job)}>
                                                                     <Edit className="mr-2 h-4 w-4" />
@@ -616,6 +632,13 @@ const RecruiterDashboard: React.FC = () => {
                                     </TableBody>
                                 </Table>
                             </div>
+
+                            <CampaignSetupModal
+                                jobId={selectedCampaignJobId}
+                                jobTitle={selectedCampaignJobTitle}
+                                isOpen={isCampaignModalOpen}
+                                onClose={() => setIsCampaignModalOpen(false)}
+                            />
                         </div>
                     )}
 

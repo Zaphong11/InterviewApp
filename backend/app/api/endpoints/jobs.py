@@ -2,10 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status,
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, or_
 from app.db.session import get_db
-from app.db.models import Job, User, Role, Interview
+from app.db.models import Job, User, Role, Interview, Campaign, CampaignStage
 from app.services.pdf_service import parse_interview_pdf
 from app.api.deps import get_current_user
 from typing import Any, List, Optional
+import json
+import os
+import uuid
+import aiofiles
+from fastapi import Form
 
 from app.schemas import job as job_schema
 from app.api import deps
@@ -271,3 +276,104 @@ def delete_job(
     db.commit()
     
     return None
+
+@router.post("/{job_id}/campaigns", response_model=job_schema.CampaignResponse)
+async def create_job_campaign(
+    job_id: int,
+    passing_rule: str = Form(...),
+    stages_data: str = Form(...),
+    files: List[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.AllowBusiness)
+):
+    """
+    Tạo Campaign cho Job với danh sách các vòng (stages) và PDF RAG tương ứng.
+    """
+    # 1. Check Job & Permission
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    if job.recruiter_id != current_user.id and current_user.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this job")
+        
+    # Check if campaign already exists
+    existing_campaign = db.query(Campaign).filter(Campaign.job_id == job_id).first()
+    if existing_campaign:
+        db.delete(existing_campaign)
+        db.commit()
+
+    # 2. Parse stages
+    try:
+        stages = json.loads(stages_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="stages_data must be valid JSON")
+
+    # 3. Create Campaign
+    campaign = Campaign(
+        job_id=job_id,
+        passing_rule=passing_rule
+    )
+    db.add(campaign)
+    db.commit()
+    db.refresh(campaign)
+
+    # 4. Handle files and create Stages
+    os.makedirs("app/uploads/campaigns", exist_ok=True)
+    
+    # Map raw filenames to uploaded files for easier access if necessary,
+    # or rely on the order. Since frontend might send it uniquely, let's assume `stages` 
+    # array has optionally a `file_name` property to match against, OR just rely on index.
+    # A safer way: frontend sends `file_index` in stage object.
+    
+    files_list = files if files else []
+    
+    for idx, stage_info in enumerate(stages):
+        stage_name = stage_info.get("stage_name")
+        ai_model = stage_info.get("ai_model", "gemini-3-flash-preview")
+        
+        if not stage_name:
+            continue
+            
+        pdf_context_url = None
+        
+        # If frontend passes 'file_index' in stage_info, match it. 
+        # Alternatively, assume files are sent in same order as they appear in the JSON
+        # Let's match by name if we pass 'file_name' in JSON, else by index if it has 'has_file'
+        
+        if stage_info.get("has_file") and files_list:
+            # Find matching file by matching `file_name` or just pop one
+            # We'll just take the first matching file name, or the matching index.
+            # Easiest: Pop from list if multiple, but files don't guarantee order.
+            # Best practice: Frontend sends file_index matching the file array
+            file_idx = stage_info.get('file_index', -1)
+            
+            if 0 <= file_idx < len(files_list):
+                file = files_list[file_idx]
+                if file.filename:
+                    ext = os.path.splitext(file.filename)[1]
+                    unique_filename = f"{uuid.uuid4().hex}{ext}"
+                    file_path = f"app/uploads/campaigns/{unique_filename}"
+                    
+                    async with aiofiles.open(file_path, 'wb') as out_file:
+                        content = await file.read()
+                        await out_file.write(content)
+                        
+                    pdf_context_url = f"/api/uploads/campaigns/{unique_filename}"
+        
+        stage = CampaignStage(
+            campaign_id=campaign.id,
+            stage_order=idx + 1,
+            stage_name=stage_name,
+            ai_model=ai_model,
+            pdf_context_url=pdf_context_url
+        )
+        db.add(stage)
+        
+    db.commit()
+    db.refresh(campaign)
+    
+    # Needs a reload to fetch relationships cleanly for response
+    # selectinload stages
+    campaign_res = db.query(Campaign).options(selectinload(Campaign.stages)).filter(Campaign.id == campaign.id).first()
+    return campaign_res

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models import Application, ApplicationNote, Job, User, Role
@@ -7,12 +7,14 @@ from typing import List
 
 from app.schemas import application as app_schema
 from app.api import deps
+from app.services.ai_cv_reviewer import analyze_cv_with_ai
 
 router = APIRouter()
 
 @router.post("/", response_model=app_schema.Application)
 def apply_for_job(
     application_in: app_schema.ApplicationCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -34,13 +36,26 @@ def apply_for_job(
     if existing_app:
         raise HTTPException(status_code=400, detail="Already applied to this job")
 
+    # Use cv_url from current user profile if not provided in payload (optional check but good for safety)
+    final_cv_url = application_in.cv_url or current_user.cv_url
+    
+    app_data = application_in.dict(exclude_unset=True)
+    if not app_data.get('cv_url') and current_user.cv_url:
+        app_data['cv_url'] = current_user.cv_url
+
     application = Application(
-        **application_in.dict(),
-        candidate_id=current_user.id
+        **app_data,
+        candidate_id=current_user.id,
+        status="SCREENING"
     )
     db.add(application)
     db.commit()
     db.refresh(application)
+    
+    # Run AI Review in background
+    if application.cv_url:
+        background_tasks.add_task(analyze_cv_with_ai, application.id)
+        
     return application
 
 @router.get("/job/{job_id}", response_model=List[app_schema.Application])

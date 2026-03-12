@@ -15,3 +15,6 @@ python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
 email-validator
+pymupdf
+langchain-openai
+langchain-anthropic

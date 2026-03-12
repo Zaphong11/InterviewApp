@@ -24,6 +24,9 @@ interface Application {
     stage: 'SCREENING' | 'TEST' | 'INTERVIEW' | 'OFFER';
     status: string;
     cv_url: string;
+    match_score?: number;
+    is_potential?: boolean;
+    short_summary?: string;
     candidate: {
         full_name: string;
         email: string;
