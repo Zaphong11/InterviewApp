@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from langchain_google_genai import ChatGoogleGenerativeAI
+from app.utils.llm_factory import get_llm
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
@@ -11,19 +11,16 @@ class GradingResult(BaseModel):
     feedback: str = Field(description="Brief feedback explaining the score")
     matched_keywords: List[str] = Field(description="List of keywords from criteria that were found in the answer")
 
-def grade_answer(question: str, criteria: List[Dict[str, Any]], user_answer: str) -> Dict[str, Any]:
+def grade_answer(question: str, criteria: List[Dict[str, Any]], user_answer: str, model_name: str = "qwen3.5:4b") -> Dict[str, Any]:
     """
     Grades a user's answer based on the question and criteria using AI.
     """
-    if not settings.GOOGLE_API_KEY:
-        raise ValueError("GOOGLE_API_KEY is not set")
+    if not settings.GOOGLE_API_KEY and "claude" not in model_name and "gpt" not in model_name:
+         # Simplified check, llm_factory handles actual key checks
+         pass
 
     # Initialize LLM
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        google_api_key=settings.GOOGLE_API_KEY,
-        temperature=0
-    )
+    llm = get_llm(model_name=model_name, temperature=0)
 
     # Setup Parser
     parser = JsonOutputParser(pydantic_object=GradingResult)
@@ -84,18 +81,12 @@ def grade_answer(question: str, criteria: List[Dict[str, Any]], user_answer: str
     result['score'] = final_score
     return result
 
-def generate_final_summary(questions: List[Dict[str, Any]]) -> str:
+def generate_final_summary(questions: List[Dict[str, Any]], model_name: str = "qwen3.5:4b") -> str:
     """
     Generates a final summary of the interview based on all questions and answers.
     """
-    if not settings.GOOGLE_API_KEY:
-        raise ValueError("GOOGLE_API_KEY is not set")
-
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        google_api_key=settings.GOOGLE_API_KEY,
-        temperature=0.7
-    )
+    
+    llm = get_llm(model_name=model_name, temperature=0.7)
 
     # Construct context from questions
     context_parts = []

@@ -25,6 +25,11 @@ class ApplicationBase(BaseModel):
     target_role: Optional[str] = None
     stage: ApplicationStage = ApplicationStage.SCREENING
     status: str = "ACTIVE"
+    match_score: Optional[int] = None
+    is_potential: Optional[bool] = False
+    matched_skills: Optional[List[str]] = None
+    missing_skills: Optional[List[str]] = None
+    short_summary: Optional[str] = None
 
 class ApplicationCreate(ApplicationBase):
     job_id: int

@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.api import deps
 from app.db.session import get_db
-from app.db.models import User, Job, Interview, InterviewStatus
+from app.db.models import User, Job, Interview, InterviewStatus, Campaign, CampaignStage
 from app.schemas import interview as interview_schema
 from typing import Union, List
 from pydantic import BaseModel
 from app.services.grading_service import grade_answer
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import desc
+import os
+from app.services.pdf_service import parse_interview_pdf
 
 router = APIRouter()
 
@@ -29,13 +31,31 @@ def get_my_interviews(
         Interview.status,
         Interview.total_score,
         Interview.decision,
+        Interview.job_id,
+        Interview.content,
         Job.title.label("job_title")
     ).join(Job, Interview.job_id == Job.id)\
     .filter(Interview.candidate_id == current_user.id)\
     .order_by(desc(Interview.created_at))\
     .all()
 
-    return results
+    final_results = []
+    for r in results:
+        stage_name = r.content.get("stage_name", "") if r.content else ""
+        title = r.job_title
+        if stage_name and stage_name != "Phỏng vấn trực tuyến":
+             title = f"{title} - {stage_name}"
+        final_results.append({
+            "id": r.id,
+            "job_id": r.job_id,
+            "job_title": title,
+            "created_at": r.created_at,
+            "status": r.status,
+            "total_score": r.total_score,
+            "decision": r.decision
+        })
+
+    return final_results
 
 @router.post("/start", response_model=interview_schema.Interview)
 def start_interview(
@@ -47,21 +67,78 @@ def start_interview(
     Bắt đầu phỏng vấn cho một Job.
     User phải là Candidate.
     """
-    # 1. Tìm Job
-    job = db.query(Job).filter(Job.id == request.job_id).first()
+    # 1. Tìm Job kèm Campaign
+    job = db.query(Job).options(selectinload(Job.campaign).selectinload(Campaign.stages)).filter(Job.id == request.job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Check if interview already exists for this candidate and job
-    existing_interview = db.query(Interview).filter(
+    existing_interviews = db.query(Interview).filter(
         Interview.job_id == request.job_id,
         Interview.candidate_id == current_user.id
-    ).first()
-    if existing_interview:
-        return existing_interview
-    
-    if not job.questions_template:
-        raise HTTPException(status_code=400, detail="Job does not have questions template")
+    ).order_by(Interview.created_at.asc()).all()
+
+    if existing_interviews:
+        last_interview = existing_interviews[-1]
+        if last_interview.status in [InterviewStatus.PENDING, InterviewStatus.IN_PROGRESS]:
+            return last_interview
+
+    # Check for Campaign logic
+    if job.campaign and job.campaign.stages:
+        stages = sorted(job.campaign.stages, key=lambda x: x.stage_order)
+        next_stage_index = len(existing_interviews)
+
+        if next_stage_index > 0:
+            # Check passing rule
+            if job.campaign.passing_rule == "PASS_ALL":
+                if any(i.decision == "REJECTED" for i in existing_interviews):
+                    raise HTTPException(status_code=403, detail="Bạn đã trượt một vòng phỏng vấn, không thể tiếp tục.")
+            elif job.campaign.passing_rule == "NO_CONDITION":
+                pass # Ứng viên thi liên tục mà không bao giờ bị chặn
+
+        if next_stage_index >= len(stages):
+            raise HTTPException(status_code=400, detail="Bạn đã hoàn thành tất cả các vòng phỏng vấn.")
+        
+        current_stage = stages[next_stage_index]
+        
+        if not current_stage.pdf_context_url:
+             raise HTTPException(status_code=400, detail="Vòng phỏng vấn không có kịch bản.")
+             
+        filename = current_stage.pdf_context_url.split('/')[-1]
+        file_path = os.path.join("app", "uploads", "campaigns", filename)
+        
+        if not os.path.exists(file_path):
+             raise HTTPException(status_code=404, detail="File kịch bản không tồn tại trên hệ thống.")
+             
+        with open(file_path, "rb") as f:
+             pdf_content = f.read()
+             
+        try:
+             extracted_data = parse_interview_pdf(pdf_content)
+        except Exception as e:
+             raise HTTPException(status_code=500, detail=f"Lỗi phân tích kịch bản vòng thi bằng AI: {str(e)}")
+             
+        # ExtractionResult or dict
+        questions_temp = extracted_data.get("questions", extracted_data) if isinstance(extracted_data, dict) else getattr(extracted_data, "questions", extracted_data)
+        ai_model = current_stage.ai_model
+        stage_name = current_stage.stage_name
+    else:
+        # Legacy
+        if existing_interviews:
+             raise HTTPException(status_code=400, detail="Bạn đã hoàn thành phỏng vấn cho vị trí này.")
+        
+        if not job.questions_template:
+            # Fallback instead of raising 400
+            questions_temp = [
+                {
+                    "question_text": "Hãy giới thiệu về bản thân bạn",
+                    "criteria": [{"keyword": "Kinh nghiệm", "score": 5}, {"keyword": "Chuyên môn", "score": 5}]
+                }
+            ]
+        else:
+            questions_temp = job.questions_template
+            
+        ai_model = "qwen3.5:4b"
+        stage_name = "Phỏng vấn trực tuyến"
 
     # 1.5 Auto-create an Application for ATS Board
     from app.db.models import Application, ApplicationStage
@@ -82,30 +159,45 @@ def start_interview(
         db.flush() # Flush để lấy ID nếu cần, commit sẽ gom chung ở dưới
 
     # 2. Map questions_template -> InterviewContent
-    # questions_template là list of dict (từ JSONB)
-    # Cấu trúc mong đợi của questions_template: [{"question_text": "...", "criteria": [...]}]
-    
     questions_data = []
-    for q in job.questions_template:
-        # Validate structure if needed, or assume it matches
-        # Create Question object structure
-        # Ensure criteria has required fields
+    
+    # Handle both dict and object structures
+    questions_list = questions_temp if isinstance(questions_temp, list) else [questions_temp]
+    
+    for q in questions_list:
+        if isinstance(q, dict):
+            q_text = q.get("question_text", "Untitled Question")
+            q_criteria = q.get("criteria", [])
+        else:
+            q_text = getattr(q, 'question_text', "Untitled Question")
+            q_criteria = getattr(q, 'criteria', [])
+
         criteria_list = []
-        for c in q.get("criteria", []):
-            criteria_list.append({
-                "keyword": c.get("keyword", "Unknown"),
-                "score": c.get("score", 0.0)
-            })
+        for c in q_criteria:
+            if isinstance(c, dict):
+                criteria_list.append({
+                    "keyword": c.get("keyword", "Unknown"),
+                    "score": c.get("score", c.get("points", 0.0))
+                })
+            else:
+                criteria_list.append({
+                    "keyword": getattr(c, 'keyword', "Unknown"),
+                    "score": getattr(c, 'score', getattr(c, 'points', 0.0))
+                })
 
         question_obj = {
-            "question_text": q.get("question_text", "Untitled Question"),
+            "question_text": q_text,
             "criteria": criteria_list,
             "user_answer": None,
             "ai_grade": None
         }
         questions_data.append(question_obj)
 
-    interview_content = {"questions": questions_data}
+    interview_content = {
+        "stage_name": stage_name,
+        "ai_model": ai_model,
+        "questions": questions_data
+    }
 
     # 3. Tạo Interview
     new_interview = Interview(
@@ -219,18 +311,18 @@ def finish_interview(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     questions = interview.content.get("questions", [])
+    ai_model = interview.content.get("ai_model", "qwen3.5:4b") # Dynamic AI model map
     total_score = 0.0
     
     # 2. Batch Grading
     for q in questions:
-        # Only grade if there is an answer and not yet graded (or force re-grade?)
-        # Let's grade if user_answer exists.
         if q.get("user_answer"):
              # Call Grading Service
              grading_result = grade_answer(
                 question=q["question_text"],
                 criteria=q.get("criteria", []),
-                user_answer=q["user_answer"]
+                user_answer=q["user_answer"],
+                model_name=ai_model
             )
              q["ai_grade"] = grading_result["score"]
              q["ai_feedback"] = grading_result["feedback"]
@@ -243,7 +335,7 @@ def finish_interview(
 
     # 3. Generate Summary
     from app.services.grading_service import generate_final_summary
-    summary = generate_final_summary(questions)
+    summary = generate_final_summary(questions, model_name=ai_model)
     
     # 4. Update Interview
     interview.content["questions"] = questions

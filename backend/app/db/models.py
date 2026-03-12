@@ -146,6 +146,33 @@ class Job(Base):
     category = relationship("JobCategory", back_populates="jobs")
     interviews = relationship("Interview", back_populates="job")
     applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")
+    campaign = relationship("Campaign", back_populates="job", uselist=False, cascade="all, delete-orphan")
+
+class Campaign(Base):
+    __tablename__ = "campaigns"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False, unique=True)
+    passing_rule = Column(String, default="PASS_ALL", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    job = relationship("Job", back_populates="campaign")
+    stages = relationship("CampaignStage", back_populates="campaign", cascade="all, delete-orphan", order_by="CampaignStage.stage_order")
+
+class CampaignStage(Base):
+    __tablename__ = "campaign_stages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    stage_order = Column(Integer, nullable=False)
+    stage_name = Column(String, nullable=False)
+    ai_model = Column(String, default="gemini-3-flash-preview", nullable=False)
+    pdf_context_url = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    campaign = relationship("Campaign", back_populates="stages")
 
 
 class InterviewStatus(str, enum.Enum):
@@ -187,7 +214,15 @@ class Application(Base):
     target_role = Column(String, nullable=True)
     cv_url = Column(String, nullable=True)
     stage = Column(Enum(ApplicationStage), default=ApplicationStage.SCREENING, nullable=False)
-    status = Column(String, default="ACTIVE") # e.g., ACTIVE, REJECTED, HIRED
+    status = Column(String, default="ACTIVE") # e.g., ACTIVE, REJECTED, HIRED, SCREENING, REVIEWED
+    
+    # AI Review Fields
+    match_score = Column(Integer, nullable=True) # 0-100
+    is_potential = Column(Boolean, default=False)
+    matched_skills = Column(JSONB, nullable=True)
+    missing_skills = Column(JSONB, nullable=True)
+    short_summary = Column(Text, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

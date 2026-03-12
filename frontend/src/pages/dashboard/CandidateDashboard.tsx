@@ -18,12 +18,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
+import { toast } from 'sonner';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
-import { Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Eye, CheckCircle, XCircle, Clock, PlayCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface InterviewHistory {
     id: number;
+    job_id: number;
     job_title: string;
     created_at: string;
     status: string;
@@ -45,6 +47,32 @@ const CandidateDashboard: React.FC = () => {
             setInterviews(response.data);
         } catch (error) {
             console.error('Failed to fetch interviews:', error);
+        }
+    };
+
+    const handleContinueInterview = async (jobId: number) => {
+        try {
+            const response = await api.post('/api/v1/interviews/start', { job_id: jobId });
+            const interview = response.data;
+            toast.success('Bắt đầu phỏng vấn thành công!');
+            navigate(`/interview/${interview.id}/room`);
+        } catch (error: any) {
+            console.error('Failed to start interview:', error);
+            if (error.response?.status === 401) {
+                toast.error('Vui lòng đăng nhập lại');
+                navigate('/login');
+            } else if (error.response?.data?.detail) {
+                const detail = error.response.data.detail;
+                if (typeof detail === 'string') {
+                    toast.error(detail);
+                } else if (Array.isArray(detail)) {
+                    toast.error(`Lỗi dữ liệu: ${detail[0]?.msg || 'Không xác định'}`);
+                } else {
+                    toast.error('Lỗi dữ liệu từ server');
+                }
+            } else {
+                toast.error('Không thể bắt đầu phỏng vấn. Vui lòng thử lại.');
+            }
         }
     };
 
@@ -152,7 +180,7 @@ const CandidateDashboard: React.FC = () => {
                                             <TableCell>
                                                 {getDecisionIcon(interview.decision)}
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right flex items-center justify-end gap-2">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -161,6 +189,17 @@ const CandidateDashboard: React.FC = () => {
                                                 >
                                                     <Eye className="w-4 h-4" />
                                                 </Button>
+                                                {(interview.status === 'completed' || interview.status === 'graded') && interview.decision !== 'REJECTED' && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                        onClick={() => handleContinueInterview(interview.job_id)}
+                                                        title="Thi vòng tiếp theo"
+                                                    >
+                                                        <PlayCircle className="w-4 h-4" />
+                                                    </Button>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))}

@@ -52,11 +52,49 @@ export const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ job, isOpen, o
             onClose();
         } catch (error: any) {
             console.error('Failed to start interview:', error);
-            if (error.response && error.response.status === 401) {
+            if (error.response?.status === 401) {
                 toast.error('Vui lòng đăng nhập lại');
                 navigate('/login');
+            } else if (error.response?.data?.detail) {
+                const detail = error.response.data.detail;
+                if (typeof detail === 'string') {
+                    toast.error(detail);
+                } else if (Array.isArray(detail)) {
+                    toast.error(`Lỗi dữ liệu: ${detail[0]?.msg || 'Không xác định'}`);
+                } else {
+                    toast.error('Lỗi dữ liệu từ server');
+                }
             } else {
                 toast.error('Không thể bắt đầu phỏng vấn. Vui lòng thử lại.');
+            }
+        }
+    };
+
+    const handleApply = async () => {
+        if (!user) {
+            toast.error('Vui lòng đăng nhập để nộp đơn');
+            navigate('/login');
+            return;
+        }
+
+        if (!user.cv_url) {
+            toast.error('Thất bại do không tìm thấy CV của bạn');
+            return;
+        }
+
+        try {
+            await api.post('/api/v1/applications/', {
+                job_id: job.id,
+                target_role: job.title
+            });
+            toast.success('Yêu cầu của bạn đã được ghi nhận');
+            onClose(); // Optional: close the dialog after success
+        } catch (error: any) {
+            console.error('Failed to apply:', error);
+            if (error.response && error.response.data && error.response.data.detail) {
+                toast.error(error.response.data.detail);
+            } else {
+                toast.error('Có lỗi xảy ra khi nộp đơn.');
             }
         }
     };
@@ -117,11 +155,14 @@ export const JobDetailDialog: React.FC<JobDetailDialogProps> = ({ job, isOpen, o
                     </div>
                 </div>
 
-                <DialogFooter className="mt-4 pt-4 border-t">
+                <DialogFooter className="mt-4 pt-4 border-t flex items-center justify-end gap-2">
                     <Button variant="outline" onClick={onClose}>
                         Đóng
                     </Button>
-                    <Button onClick={handleStartInterview}>
+                    <Button onClick={handleApply} className="bg-primary hover:bg-primary/90 text-white">
+                        Nộp đơn
+                    </Button>
+                    <Button variant="secondary" onClick={handleStartInterview}>
                         Bắt đầu Phỏng vấn ngay
                     </Button>
                 </DialogFooter>

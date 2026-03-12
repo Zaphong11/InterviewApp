@@ -6,6 +6,7 @@ from pydantic.config import ConfigDict
 from .industry import IndustryResponse
 from .job_category import JobCategoryResponse
 from .company import Company
+from .campaign import CampaignResponse
 
 # ... Enums are same ...
 class JobType(str, enum.Enum):
@@ -72,6 +73,7 @@ class Job(JobBase):
     industry: Optional[IndustryResponse] = Field(default=None, validation_alias="industry_rel")
     category: Optional[JobCategoryResponse] = None
     company: Optional[Company] = None
+    campaign: Optional[CampaignResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
 

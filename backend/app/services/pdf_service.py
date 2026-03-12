@@ -2,8 +2,8 @@ import os
 from typing import Dict, List
 from io import BytesIO
 import pypdf
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.output_parsers import JsonOutputParser
+from app.utils.llm_factory import get_llm
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
 
@@ -33,18 +33,16 @@ def parse_interview_pdf(file_content: bytes) -> Dict:
         raise ValueError(f"Lỗi đọc file PDF: {str(e)}")
 
     # 2. Setup LangChain with Gemini
-    # Lưu ý: Sửa lại model thành 'gemini-1.5-flash' (bản chuẩn hiện tại). 
+    # Lưu ý: Sửa lại model thành 'gemini-3-flash-preview' (bản chuẩn hiện tại). 
     # Nếu bạn thực sự có access vào bản 2.5 thì hãy đổi lại.
-    from app.core.config import settings
-    api_key = settings.GOOGLE_API_KEY
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY chưa được cấu hình trong biến môi trường")
-
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash", 
-        google_api_key=api_key,
-        temperature=0.2 # Tăng nhẹ temperature để AI chọn câu hỏi "khôn" hơn
-    )
+    try:
+        from app.core.config import settings
+        if not settings.GOOGLE_API_KEY:
+            raise ValueError("GOOGLE_API_KEY chưa được cấu hình trong biến môi trường")
+            
+        llm = get_llm(model_name="qwen3.5:4b", temperature=0.2)
+    except Exception as env_err:
+        raise ValueError(f"Cấu hình AI lỗi: {env_err}")
 
     # 3. Define Prompt and Parser
     parser = JsonOutputParser(pydantic_object=ExtractionResult)
@@ -81,7 +79,7 @@ def parse_interview_pdf(file_content: bytes) -> Dict:
 
     # 4. Execute Chain
     try:
-        # Gemini 1.5 Flash có context window 1M token, nên ném 100 trang PDF vào cũng vô tư.
+        # Gemini 2.5 Flash có context window 1M token, nên ném 100 trang PDF vào cũng vô tư.
         result = chain.invoke({"text": text})
         return result
     except Exception as e:
