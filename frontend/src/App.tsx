@@ -10,7 +10,7 @@ import CandidateDashboard from "@/pages/dashboard/CandidateDashboard"
 import JobCandidates from "@/pages/dashboard/JobCandidates"
 import InterviewReport from "@/pages/dashboard/InterviewReport"
 import AdminDashboard from "@/pages/dashboard/AdminDashboard"
-
+import ResumeReview from "@/pages/dashboard/ResumeReview"
 import InterviewRoom from "@/pages/interview/InterviewRoom"
 
 import CandidateResult from "@/pages/interview/CandidateResult"
@@ -37,6 +37,7 @@ function App() {
         {/* Protected Routes - Candidate */}
         <Route element={<ProtectedRoute allowedRoles={['candidate']} />}>
           <Route path="/candidate-dashboard" element={<CandidateDashboard />} />
+          <Route path="/resume-review" element={<ResumeReview />} />
           <Route path="/my-result/:id" element={<CandidateResult />} />
           <Route path="/interview/:id" element={<InterviewDetail />} />
           <Route path="/interview/:id/room" element={<InterviewRoom />} />

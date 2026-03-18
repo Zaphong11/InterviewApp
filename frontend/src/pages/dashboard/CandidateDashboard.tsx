@@ -19,85 +19,58 @@ import {
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
-import { Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-interface InterviewHistory {
+import { toast } from 'sonner';
+interface ApplicationHistory {
     id: number;
+    job_id: number;
     job_title: string;
     created_at: string;
     status: string;
-    total_score: number | null;
-    decision: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+    match_score: number | null;
 }
-
 const CandidateDashboard: React.FC = () => {
-    const [interviews, setInterviews] = useState<InterviewHistory[]>([]);
+    const [applications, setApplications] = useState<ApplicationHistory[]>([]);
     const navigate = useNavigate();
-
     useEffect(() => {
-        fetchInterviews();
+        fetchApplications();
     }, []);
-
-    const fetchInterviews = async () => {
+    const fetchApplications = async () => {
         try {
-            const response = await api.get('/api/v1/interviews/me');
-            setInterviews(response.data);
+            const response = await api.get('/api/v1/applications/me');
+            setApplications(response.data);
         } catch (error) {
-            console.error('Failed to fetch interviews:', error);
+            console.error('Failed to fetch applications:', error);
+            toast.error('Lỗi khi tải danh sách ứng tuyển');
+        }
+    };
+    const handleStartInterview = async (jobId: number) => {
+        try {
+            const response = await api.post('/api/v1/interviews/start', { job_id: jobId });
+            const interview = response.data;
+            toast.success('Bắt đầu phỏng vấn thành công!');
+            navigate(`/interview/${interview.id}/room`);
+        } catch (error: any) {
+            console.error('Failed to start interview:', error);
+            toast.error('Không thể bắt đầu phỏng vấn. Vui lòng thử lại.');
         }
     };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'completed':
-            case 'graded':
-                return <Badge className="bg-green-500">Hoàn thành</Badge>;
-            case 'in_progress':
-                return <Badge className="bg-blue-500">Đang thực hiện</Badge>;
+            case 'SCREENING':
+                return <Badge variant="secondary">Đợi duyệt CV</Badge>;
+            case 'AI_TEST':
+                return <Badge className="bg-blue-500 text-white">Bài Test AI</Badge>;
+            case 'INTERVIEW':
+                return <Badge className="bg-purple-500 text-white">Phỏng vấn</Badge>;
+            case 'OFFER':
+                return <Badge className="bg-green-500 text-white">Đề nghị (Offer)</Badge>;
+            case 'REJECTED':
+                return <Badge className="bg-red-500 text-white">Từ chối</Badge>;
             default:
                 return <Badge variant="secondary">{status}</Badge>;
         }
     };
-
-    const getDecisionIcon = (decision: string) => {
-        switch (decision) {
-            case 'ACCEPTED':
-                return (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <CheckCircle className="w-6 h-6 text-green-600" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Chúc mừng! Bạn đã được nhận</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                );
-            case 'REJECTED':
-                return (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <XCircle className="w-6 h-6 text-red-600" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Rất tiếc, bạn chưa phù hợp</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                );
-            default:
-                return (
-                    <div className="flex items-center text-gray-500 text-sm">
-                        <Clock className="w-4 h-4 mr-1" />
-                        Đang chờ duyệt
-                    </div>
-                );
-        }
-    };
-
     return (
         <DashboardLayout>
             <div className="container mx-auto py-8 px-4">
@@ -107,7 +80,6 @@ const CandidateDashboard: React.FC = () => {
                         Theo dõi lịch sử phỏng vấn của bạn.
                     </p>
                 </div>
-
                 <Card>
                     <CardHeader>
                         <CardTitle>Lịch sử phỏng vấn</CardTitle>
@@ -116,51 +88,38 @@ const CandidateDashboard: React.FC = () => {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {interviews.length === 0 ? (
+                        {applications.length === 0 ? (
                             <div className="text-center py-8 text-muted-foreground">
-                                Bạn chưa tham gia phỏng vấn nào.
+                                Bạn chưa nộp đơn ứng tuyển nào.
                             </div>
                         ) : (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Vị trí ứng tuyển</TableHead>
-                                        <TableHead>Ngày thực hiện</TableHead>
+                                        <TableHead>Ngày nộp</TableHead>
                                         <TableHead>Trạng thái</TableHead>
-                                        <TableHead>Điểm số</TableHead>
-                                        <TableHead>Kết quả</TableHead>
                                         <TableHead className="text-right">Hành động</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {interviews.map((interview) => (
-                                        <TableRow key={interview.id}>
-                                            <TableCell className="font-medium">{interview.job_title}</TableCell>
-                                            <TableCell>
-                                                {new Date(interview.created_at).toLocaleDateString('vi-VN')}
-                                            </TableCell>
-                                            <TableCell>{getStatusBadge(interview.status)}</TableCell>
-                                            <TableCell>
-                                                {interview.total_score !== null ? (
-                                                    <span className="font-bold text-primary">
-                                                        {interview.total_score.toFixed(1)}/100
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {getDecisionIcon(interview.decision)}
-                                            </TableCell>
+                                    {applications.map((app) => (
+                                        <TableRow key={app.id}>
+                                            <TableCell className="font-medium">{app.job_title}</TableCell>
+                                            <TableCell>{new Date(app.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                                            <TableCell>{getStatusBadge(app.status)}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => navigate(`/my-result/${interview.id}`)}
-                                                    title="Xem kết quả"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </Button>
+                                                {app.status === 'AI_TEST' ? (
+                                                    <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        onClick={() => handleStartInterview(app.job_id)}
+                                                    >
+                                                        Bắt đầu phỏng vấn
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground italic">Chưa có hành động</span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -173,5 +132,4 @@ const CandidateDashboard: React.FC = () => {
         </DashboardLayout>
     );
 };
-
 export default CandidateDashboard;

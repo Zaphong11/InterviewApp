@@ -11,24 +11,19 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
 import { UserProfileDialog } from '@/components/user/UserProfileDialog';
 import { useState } from 'react';
-
 interface DashboardLayoutProps {
     children: React.ReactNode;
 }
-
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
-
     const getDashboardLink = () => {
         if (!user) return '/login';
         switch (user.role) {
@@ -42,7 +37,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                 return '/dashboard';
         }
     };
-
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
             {/* Sticky Header */}
@@ -55,7 +49,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                                 InterviewAI
                             </span>
                         </Link>
-
                         <nav className="hidden md:flex items-center gap-6">
                             <NavLink
                                 to="/"
@@ -77,9 +70,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                                     Dashboard
                                 </NavLink>
                             )}
+                            {user?.role === 'candidate' && (
+                                <NavLink
+                                    to="/resume-review"
+                                    className={({ isActive }) =>
+                                        `text-sm font-medium transition-colors hover:text-primary ${isActive ? 'text-foreground flex items-center gap-1' : 'text-muted-foreground flex items-center gap-1'
+                                        }`
+                                    }
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sparkles text-amber-500"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                                    Chấm điểm CV
+                                </NavLink>
+                            )}
                         </nav>
                     </div>
-
                     {/* Right: User Info & Actions */}
                     <div className="flex items-center gap-4">
                         {user ? (
@@ -112,7 +116,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
-
                                 <UserProfileDialog
                                     isOpen={isProfileOpen}
                                     onClose={() => setIsProfileOpen(false)}
@@ -124,7 +127,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                     </div>
                 </div>
             </header>
-
             {/* Main Content */}
             <main className="flex-1 container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {children}

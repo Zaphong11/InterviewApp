@@ -88,11 +88,9 @@ export const UserProfileDialog: React.FC<UserProfileDialogProps> = ({ isOpen, on
                                         <button
                                             onClick={() => {
                                                 if (!user.cv_url) return;
-                                                let url = user.cv_url;
-                                                if (url.startsWith('/')) {
-                                                    const baseURL = api.defaults.baseURL || 'http://127.0.0.1:8000';
-                                                    url = `${baseURL.replace(/\/$/, '')}${url}`;
-                                                }
+                                                const url = user.cv_url.startsWith('http')
+                                                    ? user.cv_url
+                                                    : `http://localhost:8000${user.cv_url.startsWith('/') ? '' : '/'}${user.cv_url}`;
                                                 window.open(url, '_blank');
                                             }}
                                             className="text-blue-600 hover:text-blue-800 cursor-pointer"

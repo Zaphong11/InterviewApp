@@ -103,13 +103,9 @@ const InterviewReport: React.FC = () => {
 
     const handleViewCV = () => {
         if (!interview?.candidate?.cv_url) return;
-        let url = interview.candidate.cv_url;
-        // Nếu là đường dẫn tương đối (bắt đầu bằng /), nối thêm baseURL
-        if (url.startsWith('/')) {
-            const baseURL = api.defaults.baseURL || 'http://127.0.0.1:8000';
-            // Đảm bảo không bị double slash
-            url = `${baseURL.replace(/\/$/, '')}${url}`;
-        }
+        const url = interview.candidate.cv_url.startsWith('http')
+            ? interview.candidate.cv_url
+            : `http://localhost:8000${interview.candidate.cv_url.startsWith('/') ? '' : '/'}${interview.candidate.cv_url}`;
         window.open(url, '_blank');
     };
 
