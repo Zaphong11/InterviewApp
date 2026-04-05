@@ -21,9 +21,11 @@ class QuestionCandidate(BaseModel):
 
 class InterviewContent(BaseModel):
     questions: List[Question]
+    interview_duration: Optional[int] = None
 
 class InterviewContentCandidate(BaseModel):
     questions: List[QuestionCandidate]
+    interview_duration: Optional[int] = None
 
 class SubmitAnswerRequest(BaseModel):
     question_id: int # Index of the question in the list

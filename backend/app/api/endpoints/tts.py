@@ -1,27 +1,33 @@
-import edge_tts
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
+import io
+import soundfile as sf
+from vieneu import Vieneu
+import neucodec
 
 router = APIRouter()
+
+REMOTE_API_BASE = 'http://localhost:23333/v1'
+REMOTE_MODEL_ID = "pnnbao-ump/VieNeu-TTS"
+
+tts = Vieneu(
+    mode = 'remote',
+    api_base = REMOTE_API_BASE,
+    model_name = REMOTE_MODEL_ID,
+    codec_repo="neuphonic/neucodec-onnx-decoder-int8")
+SAMPLE_RATE = 24_000
 
 class TTSRequest(BaseModel):
     text: str
 
 @router.post("/speak")
-async def text_to_speech(request: TTSRequest):
-    """
-    Convert text to speech using edge-tts.
-    Returns audio/mpeg stream.
-    """
-    # Sử dụng giọng NamMinhNeural (Nam) hoặc HoaiMyNeural (Nữ)
-    voice = "vi-VN-HoaiMyNeural"
-    communicate = edge_tts.Communicate(request.text, voice)
+def text_to_speech(request: TTSRequest):
+    try:
+        audio_array = tts.infer(text=request.text)
+        virtual_file = io.BytesIO()
+        sf.write(virtual_file, audio_array,samplerate=SAMPLE_RATE , format="wav")
+        return Response(content=virtual_file.getvalue(), media_type="audio/wav")
+    except Exception as e:
+        print(f"TTS ERROR: {e}")
+        return Response(content=b"", status_code=500)
 
-    # Lưu vào RAM hoặc file tạm rồi trả về bytes
-    # Cách đơn giản nhất để stream bytes:
-    audio_data = b""
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_data += chunk["data"]
-            
-    return Response(content=audio_data, media_type="audio/mpeg")

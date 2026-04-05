@@ -87,7 +87,10 @@ def start_interview(
         }
         questions_data.append(question_obj)
 
-    interview_content = {"questions": questions_data}
+    interview_content = {
+        "questions": questions_data,
+        "interview_duration": job.interview_duration
+    }
 
     # 3. Tạo Interview
     new_interview = Interview(

@@ -10,8 +10,10 @@ interface UseTTS {
 export const useTTS = (): UseTTS => {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const currentSpeakIdRef = useRef<number>(0);
 
     const cancel = useCallback(() => {
+        currentSpeakIdRef.current += 1; // Invalidate any pending speak operations
         if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
@@ -25,13 +27,20 @@ export const useTTS = (): UseTTS => {
 
         // Stop current audio if playing
         cancel();
+        
+        const speakId = currentSpeakIdRef.current;
 
         try {
             const response = await api.post('/api/v1/tts/speak', { text }, {
                 responseType: 'blob'
             });
 
-            const blob = new Blob([response.data], { type: 'audio/mpeg' });
+            // If cancel was called or a new speak was initiated while we were fetching
+            if (currentSpeakIdRef.current !== speakId) {
+                return;
+            }
+
+            const blob = new Blob([response.data], { type: 'audio/wav' });
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
 
@@ -39,22 +48,32 @@ export const useTTS = (): UseTTS => {
 
             audio.onplay = () => setIsSpeaking(true);
             audio.onended = () => {
-                setIsSpeaking(false);
+                if (currentSpeakIdRef.current === speakId) {
+                    setIsSpeaking(false);
+                }
                 URL.revokeObjectURL(url); // Cleanup
-                audioRef.current = null;
+                if (audioRef.current === audio) {
+                    audioRef.current = null;
+                }
             };
             audio.onerror = (e) => {
                 console.error("Audio playback error:", e);
-                setIsSpeaking(false);
+                if (currentSpeakIdRef.current === speakId) {
+                    setIsSpeaking(false);
+                }
                 URL.revokeObjectURL(url);
-                audioRef.current = null;
+                if (audioRef.current === audio) {
+                    audioRef.current = null;
+                }
             };
 
             await audio.play();
 
         } catch (error) {
             console.error("TTS API Error:", error);
-            setIsSpeaking(false);
+            if (currentSpeakIdRef.current === speakId) {
+                setIsSpeaking(false);
+            }
         }
     }, [cancel]);
 

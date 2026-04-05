@@ -82,6 +82,7 @@ class Job(Base):
     currency = Column(String, default="VND")
     location = Column(String, nullable=False)  # Required now
     experience_level = Column(Enum(ExperienceLevel), nullable=True)
+    interview_duration = Column(Integer, nullable=True)  # Duration in minutes
     recruiter = relationship("User", back_populates="jobs")
     industry_rel = relationship("Industry",
                                 back_populates="jobs")  # Renamed to avoid conflict if 'industry' field existed, but we removed it.

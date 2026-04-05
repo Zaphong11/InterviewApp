@@ -55,6 +55,7 @@ interface Job {
     location?: string;
     salary_min?: number;
     salary_max?: number;
+    interview_duration?: number;
 }
 
 interface Industry {
@@ -92,6 +93,7 @@ const RecruiterDashboard: React.FC = () => {
     const [salaryMin, setSalaryMin] = useState<string>('');
     const [salaryMax, setSalaryMax] = useState<string>('');
     const [isNegotiable, setIsNegotiable] = useState(false);
+    const [interviewDuration, setInterviewDuration] = useState<string>('');
 
     const [file, setFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -135,6 +137,7 @@ const RecruiterDashboard: React.FC = () => {
         setSalaryMin('');
         setSalaryMax('');
         setIsNegotiable(false);
+        setInterviewDuration('');
 
         setFile(null);
         setIsEditing(false);
@@ -156,6 +159,7 @@ const RecruiterDashboard: React.FC = () => {
         setSalaryMin(job.salary_min ? job.salary_min.toString() : '');
         setSalaryMax(job.salary_max ? job.salary_max.toString() : '');
         setIsNegotiable(job.salary_min === 0); // Assuming 0 implies negotiable based on my quick fix in migration
+        setInterviewDuration(job.interview_duration ? job.interview_duration.toString() : '');
 
         setFile(null);
         setCurrentJobId(job.id);
@@ -176,6 +180,7 @@ const RecruiterDashboard: React.FC = () => {
         setSalaryMin(job.salary_min ? job.salary_min.toString() : '');
         setSalaryMax(job.salary_max ? job.salary_max.toString() : '');
         setIsNegotiable(job.salary_min === 0);
+        setInterviewDuration(job.interview_duration ? job.interview_duration.toString() : '');
 
         setFile(null);
         setIsReadOnly(true);
@@ -224,6 +229,7 @@ const RecruiterDashboard: React.FC = () => {
 
         const salary_min = isNegotiable ? 0 : (parseInt(salaryMin) || 0);
         const salary_max = isNegotiable ? null : (parseInt(salaryMax) || null);
+        const interview_duration_val = parseInt(interviewDuration) || null;
 
         const jobPayload = {
             title,
@@ -234,6 +240,7 @@ const RecruiterDashboard: React.FC = () => {
             location,
             salary_min,
             salary_max,
+            interview_duration: interview_duration_val,
             currency: 'VND', // Default
             experience_level: null // Optional for now
         };
@@ -448,6 +455,17 @@ const RecruiterDashboard: React.FC = () => {
                                                         />
                                                     </div>
                                                 )}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="interviewDuration">Thời gian phỏng vấn (phút)</Label>
+                                                <Input
+                                                    id="interviewDuration"
+                                                    type="number"
+                                                    value={interviewDuration}
+                                                    onChange={(e) => setInterviewDuration(e.target.value)}
+                                                    placeholder="VD: 15"
+                                                    disabled={isReadOnly}
+                                                />
                                             </div>
                                         </div>
 

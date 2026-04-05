@@ -33,6 +33,9 @@ const InterviewRoom: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isFinished, setIsFinished] = useState(false);
+    
+    // Timer states
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +89,16 @@ const InterviewRoom: React.FC = () => {
                 const data = response.data;
                 const fetchedQuestions = data.content.questions || [];
                 setQuestions(fetchedQuestions);
+                
+                // Get interview duration and calculate initial time left
+                const duration = data.content.interview_duration;
+                if (duration) {
+                    if (data.status !== "COMPLETED" && data.status !== "GRADED") {
+                        // Assuming brand new interview starts at full duration. 
+                        // For a robust resume, we'd calculate: (created_at + duration) - now
+                        setTimeLeft(duration * 60);
+                    }
+                }
 
                 // Reconstruct history
                 const history: Message[] = [];
@@ -186,6 +199,7 @@ const InterviewRoom: React.FC = () => {
     };
 
     const handleFinish = async () => {
+        if (isProcessing || isFinished) return;
         setIsProcessing(true); // Show loading overlay
         try {
             const response = await api.post(`/api/v1/interviews/${id}/finish`);
@@ -223,6 +237,23 @@ const InterviewRoom: React.FC = () => {
         }
     };
 
+    // Timer logic
+    useEffect(() => {
+        if (timeLeft === null || isFinished || isProcessing) return;
+
+        if (timeLeft <= 0) {
+            toast.error("Đã hết thời gian phỏng vấn! Tự động nộp bài.");
+            handleFinish();
+            return;
+        }
+
+        const timerId = setInterval(() => {
+            setTimeLeft((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+        }, 1000);
+
+        return () => clearInterval(timerId);
+    }, [timeLeft, isFinished, isProcessing]);
+
     if (isLoading) {
         return <div className="flex items-center justify-center h-screen">Đang tải...</div>;
     }
@@ -231,17 +262,42 @@ const InterviewRoom: React.FC = () => {
         return <span>Browser doesn't support speech recognition.</span>;
     }
 
+
+
+    const formatTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
     return (
         <div className="flex flex-col h-screen bg-gray-50">
             {/* Header */}
             <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
-                <div>
+                <div className="flex-1">
                     <h1 className="text-xl font-bold text-gray-800">Phỏng vấn AI</h1>
                     <p className="text-sm text-gray-500">Job ID: {id}</p>
                 </div>
-                <Button variant="destructive" onClick={() => navigate('/candidate-dashboard')}>
-                    Kết thúc
-                </Button>
+                
+                {/* Timer Display */}
+                {timeLeft !== null && !isFinished && (
+                    <div className="flex-1 flex justify-center">
+                        <div className={cn(
+                            "font-mono text-2xl font-bold px-6 py-2 rounded-full border shadow-sm transition-colors",
+                            timeLeft <= 60 
+                                ? "bg-red-100 text-red-600 border-red-200 animate-pulse" 
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                        )}>
+                            {formatTime(timeLeft)}
+                        </div>
+                    </div>
+                )}
+                
+                <div className="flex-1 flex justify-end">
+                    <Button variant="destructive" onClick={() => navigate('/candidate-dashboard')}>
+                        Kết thúc
+                    </Button>
+                </div>
             </header>
 
             {/* Chat History */}
@@ -332,7 +388,7 @@ const InterviewRoom: React.FC = () => {
 
                     <Button
                         onClick={handleSend}
-                        disabled={!inputText.trim() || isProcessing || currentQuestionIndex >= questions.length || isFinished}
+                        disabled={!inputText.trim() || isProcessing || currentQuestionIndex >= questions.length || isFinished || (timeLeft !== null && timeLeft <= 0)}
                         className="rounded-full w-12 h-12 shrink-0"
                     >
                         <Send className="w-5 h-5" />
@@ -340,6 +396,7 @@ const InterviewRoom: React.FC = () => {
                 </div>
                 <div className="text-center mt-2 text-xs text-gray-400">
                     {listening ? "Đang nghe... (Nói xong bấm lại nút Micro để dừng)" : "Bấm nút Micro để bắt đầu nói"}
+                    {timeLeft !== null && " | Lưu ý: Bài sẽ tự động nộp khi hết giờ"}
                 </div>
             </footer>
         </div>

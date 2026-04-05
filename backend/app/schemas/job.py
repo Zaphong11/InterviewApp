@@ -37,6 +37,7 @@ class JobBase(BaseModel):
     currency: Optional[str] = "VND"
     location: str  # Required
     experience_level: Optional[ExperienceLevel] = None
+    interview_duration: Optional[int] = Field(default=None, description="Thời gian phỏng vấn theo phút")
 
 
 class JobCreate(JobBase):
@@ -55,6 +56,7 @@ class Job(JobBase):
     recruiter_id: int
     created_at: datetime
     candidate_count: int = 0
+    interview_duration: Optional[int] = None
 
     # Include industry details if needed, or just ID.
     # Usually frontend wants the name.
