@@ -23,3 +23,5 @@ class ApplicationCandidateView(Application):
     candidate_email: str
     cv_url: Optional[str] = None
     job_title: str
+    interview_decision: Optional[str] = None
+    interview_id: Optional[int] = None

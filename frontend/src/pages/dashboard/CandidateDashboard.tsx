@@ -27,6 +27,8 @@ interface ApplicationHistory {
     created_at: string;
     status: string;
     match_score: number | null;
+    interview_decision?: string | null;
+    interview_id?: number | null;
 }
 const CandidateDashboard: React.FC = () => {
     const [applications, setApplications] = useState<ApplicationHistory[]>([]);
@@ -71,6 +73,20 @@ const CandidateDashboard: React.FC = () => {
                 return <Badge variant="secondary">{status}</Badge>;
         }
     };
+
+    const getInterviewBadge = (decision?: string | null) => {
+        if (!decision) return <span className="text-muted-foreground text-sm italic">Chưa có</span>;
+        switch (decision) {
+            case 'PENDING':
+                return <Badge variant="outline" className="text-yellow-600 border-yellow-300 bg-yellow-50">Đang chờ chấm</Badge>;
+            case 'ACCEPTED':
+                return <Badge className="bg-green-500 text-white">Đạt</Badge>;
+            case 'REJECTED':
+                return <Badge className="bg-red-500 text-white">Không Đạt</Badge>;
+            default:
+                return <Badge variant="secondary">{decision}</Badge>;
+        }
+    };
     return (
         <DashboardLayout>
             <div className="container mx-auto py-8 px-4">
@@ -98,7 +114,8 @@ const CandidateDashboard: React.FC = () => {
                                     <TableRow>
                                         <TableHead>Vị trí ứng tuyển</TableHead>
                                         <TableHead>Ngày nộp</TableHead>
-                                        <TableHead>Trạng thái</TableHead>
+                                        <TableHead>Trạng thái ATS</TableHead>
+                                        <TableHead>Kết quả Phỏng Vấn</TableHead>
                                         <TableHead className="text-right">Hành động</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -108,8 +125,9 @@ const CandidateDashboard: React.FC = () => {
                                             <TableCell className="font-medium">{app.job_title}</TableCell>
                                             <TableCell>{new Date(app.created_at).toLocaleDateString('vi-VN')}</TableCell>
                                             <TableCell>{getStatusBadge(app.status)}</TableCell>
+                                            <TableCell>{getInterviewBadge(app.interview_decision)}</TableCell>
                                             <TableCell className="text-right">
-                                                {app.status === 'AI_TEST' ? (
+                                                {app.status === 'AI_TEST' && !app.interview_id ? (
                                                     <Button
                                                         variant="default"
                                                         size="sm"
@@ -117,8 +135,16 @@ const CandidateDashboard: React.FC = () => {
                                                     >
                                                         Bắt đầu phỏng vấn
                                                     </Button>
+                                                ) : app.interview_id ? (
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        className="pointer-events-none opacity-50"
+                                                    >
+                                                        Đã làm bài
+                                                    </Button>
                                                 ) : (
-                                                    <span className="text-xs text-muted-foreground italic">Chưa có hành động</span>
+                                                    <span className="text-xs text-muted-foreground italic">Chưa có yêu cầu thi</span>
                                                 )}
                                             </TableCell>
                                         </TableRow>

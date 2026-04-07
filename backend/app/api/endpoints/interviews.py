@@ -189,11 +189,13 @@ def submit_answer(
 @router.post("/{interview_id}/finish", response_model=interview_schema.FinishInterviewResponse)
 def finish_interview(
     interview_id: int,
+    is_banned: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.AllowCandidate)
 ):
     """
     Nộp bài và chấm điểm toàn bộ (Batch Grading).
+    Nếu is_banned=True, bỏ qua chấm điểm, set 0 điểm do vi phạm quy chế.
     """
     # 1. Get Interview
     interview = db.query(Interview).filter(Interview.id == interview_id).first()
@@ -206,29 +208,33 @@ def finish_interview(
     questions = interview.content.get("questions", [])
     total_score = 0.0
     
-    # 2. Batch Grading
-    for q in questions:
-        # Only grade if there is an answer and not yet graded (or force re-grade?)
-        # Let's grade if user_answer exists.
-        if q.get("user_answer"):
-             # Call Grading Service
-             grading_result = grade_answer(
-                question=q["question_text"],
-                criteria=q.get("criteria", []),
-                user_answer=q["user_answer"]
-            )
-             q["ai_grade"] = grading_result["score"]
-             q["ai_feedback"] = grading_result["feedback"]
-             
-             total_score += grading_result["score"]
-        else:
-            # No answer -> 0 score
+    if is_banned:
+        for q in questions:
             q["ai_grade"] = 0.0
-            q["ai_feedback"] = "Không có câu trả lời."
+            q["ai_feedback"] = "Vi phạm quy chế phòng thi (Tắt tab/Thoát ứng dụng)."
+        summary = "HỦY KẾT QUẢ THI. Thí sinh đã vi phạm quy chế hệ thống chống gian lận (Anti-Cheat 3-Strikes). Thí sinh liên tục chuyển tab, mở ứng dụng khác hoặc thoát chế độ toàn màn hình."
+    else:
+        # 2. Normal Batch Grading
+        for q in questions:
+            if q.get("user_answer"):
+                 # Call Grading Service
+                 grading_result = grade_answer(
+                    question=q["question_text"],
+                    criteria=q.get("criteria", []),
+                    user_answer=q["user_answer"]
+                )
+                 q["ai_grade"] = grading_result["score"]
+                 q["ai_feedback"] = grading_result["feedback"]
+                 
+                 total_score += grading_result["score"]
+            else:
+                # No answer -> 0 score
+                q["ai_grade"] = 0.0
+                q["ai_feedback"] = "Không có câu trả lời."
 
-    # 3. Generate Summary
-    from app.services.grading_service import generate_final_summary
-    summary = generate_final_summary(questions)
+        # 3. Generate Summary
+        from app.services.grading_service import generate_final_summary
+        summary = generate_final_summary(questions)
     
     # 4. Update Interview
     interview.content["questions"] = questions
@@ -243,7 +249,7 @@ def finish_interview(
     
     return {
         "total_score": total_score,
-        "message": "Graded successfully",
+        "message": "Banned and Zero-scored!" if is_banned else "Graded successfully",
         "summary": summary
     }
 

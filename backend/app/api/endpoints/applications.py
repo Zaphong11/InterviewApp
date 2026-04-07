@@ -71,20 +71,28 @@ def get_my_applications(
         db: Session = Depends(get_db),
         current_user: User = Depends(deps.AllowCandidate)
 ):
+    from app.db.models import Interview
     results = db.query(
         Application, User.full_name.label("candidate_name"), User.email.label("candidate_email"), User.cv_url,
-        Job.title.label("job_title")
-    ).join(User, Application.candidate_id == User.id).join(Job, Application.job_id == Job.id).filter(
+        Job.title.label("job_title"),
+        Interview.decision.label("interview_decision"),
+        Interview.id.label("interview_id")
+    ).join(User, Application.candidate_id == User.id)\
+    .join(Job, Application.job_id == Job.id)\
+    .outerjoin(Interview, (Application.job_id == Interview.job_id) & (Application.candidate_id == Interview.candidate_id))\
+    .filter(
         Application.candidate_id == current_user.id
     ).order_by(Application.created_at.desc()).all()
 
     apps_data = []
-    for app, name, email, cv_url, job_title in results:
+    for app, name, email, cv_url, job_title, interview_decision, interview_id in results:
         app_dict = app.__dict__.copy()
         app_dict["candidate_name"] = name
         app_dict["candidate_email"] = email
         app_dict["cv_url"] = cv_url
         app_dict["job_title"] = job_title
+        app_dict["interview_decision"] = interview_decision
+        app_dict["interview_id"] = interview_id
         apps_data.append(app_dict)
 
     return apps_data
