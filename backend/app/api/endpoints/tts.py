@@ -4,10 +4,14 @@ import io
 import soundfile as sf
 from vieneu import Vieneu
 import neucodec
+import dotenv
+import os
+
+dotenv.load_dotenv()
 
 router = APIRouter()
 
-REMOTE_API_BASE = 'http://localhost:23333/v1'
+REMOTE_API_BASE = os.getenv("VIENEU_API")
 REMOTE_MODEL_ID = "pnnbao-ump/VieNeu-TTS"
 
 tts = Vieneu(

@@ -72,13 +72,15 @@ const InterviewRoom: React.FC = () => {
 
     // Auto-speak AI messages
     useEffect(() => {
+        if (!hasAcceptedRules) return; // BUG FIX: Ngăn chặn đọc âm thanh khi chưa bấm "Tôi đã hiểu"
+
         if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
             if (lastMessage.sender === 'ai') {
                 speak(lastMessage.text);
             }
         }
-    }, [messages, speak]);
+    }, [messages, speak, hasAcceptedRules]);
 
     // Cleanup TTS on unmount
     useEffect(() => {

@@ -37,6 +37,11 @@ async def upload_cv(
     
     # Update User
     current_user.cv_url = cv_url
+    
+    # Check and delete old resume to force re-evaluation of the new CV
+    from app.db.models import Resume
+    db.query(Resume).filter(Resume.candidate_id == current_user.id).delete(synchronize_session=False)
+    
     db.commit()
     db.refresh(current_user)
     

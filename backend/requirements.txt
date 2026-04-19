@@ -1,17 +1,52 @@
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-alembic
-pydantic
-python-dotenv
-pypdf
-langchain
-langchain-google-genai
-langchain-community
-aiofiles
-edge-tts
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
-email-validator
+# ==========================================
+# FastAPI & Web Framework
+# ==========================================
+fastapi==0.135.1
+uvicorn==0.41.0
+python-multipart==0.0.22
+aiofiles==24.1.0
+python-dotenv==1.2.2
+
+# ==========================================
+# Database & Migration Engine
+# ==========================================
+SQLAlchemy==2.0.48
+alembic==1.18.4
+psycopg2-binary==2.9.11
+pgvector==0.4.2
+
+# ==========================================
+# Validation & Authentication Security
+# ==========================================
+pydantic==2.12.5
+pydantic-settings==2.13.1
+email-validator==2.3.0
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+
+# ==========================================
+# Document Processing
+# ==========================================
+pypdf==6.9.0
+
+# ==========================================
+# LLM Processing via Google Gemini
+# ==========================================
+langchain==1.2.12
+langchain-core==1.2.19
+langchain-community==0.4.1
+langchain-google-genai==4.2.1
+
+# ==========================================
+# Local ML & Embeddings (for CV matching)
+# ==========================================
+sentence-transformers==5.4.1
+torch==2.11.0
+numpy==2.4.3
+
+# ==========================================
+# Text-to-Speech (for Interview Agent)
+# ==========================================
+vieneu==2.4.3
+neucodec==0.0.5
+soundfile==0.13.1

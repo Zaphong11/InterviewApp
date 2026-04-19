@@ -85,6 +85,7 @@ class JobCandidate(BaseModel):
     candidate_email: str
     status: str
     match_score: Optional[float] = None
+    score_breakdown: Optional[dict] = None
     strengths: Optional[list] = None
     weaknesses: Optional[list] = None
     total_score: Optional[float] = None

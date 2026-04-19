@@ -190,6 +190,7 @@ def get_job_candidates(
             "candidate_email": candidate.email,
             "status": application.status.value,
             "match_score": application.match_score,
+            "score_breakdown": application.score_breakdown,
             "strengths": application.strengths,
             "weaknesses": application.weaknesses,
             "total_score": interview.total_score if interview else None,

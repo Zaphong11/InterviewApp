@@ -113,6 +113,18 @@ def analyze_resume_with_gemini(resume_id: int, db: Session):
         logger.info("Calling Gemini API...")
         parsed_output = chain.invoke({"cv_text": cv_text[:15000]})
 
+        # Vector & Domain Extraction
+        try:
+            from app.services.ai_engine import get_text_embedding, get_domain_prediction
+            cv_vector = get_text_embedding(cv_text)
+            domain_preds = get_domain_prediction(cv_vector)
+            top_domain = list(domain_preds.keys())[0]
+
+            resume.embedding = cv_vector
+            resume.core_domain = top_domain
+        except Exception as e_vec:
+            logger.error(f"Error extracting vector/domain in resume analysis: {e_vec}")
+
         # 5. Update DB
         resume.score = parsed_output.overall_score
         resume.feedback = parsed_output.dict()  # Convert Pydantic object to JSON format

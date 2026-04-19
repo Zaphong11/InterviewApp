@@ -1,6 +1,7 @@
 # app/db/models.py
 from sqlalchemy import Column, Integer, String, Boolean, Enum, ForeignKey, Text, Float, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
@@ -60,6 +61,7 @@ class Industry(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     slug = Column(String, unique=True, index=True, nullable=False)
+    domain = Column(String, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     jobs = relationship("Job", back_populates="industry_rel")
@@ -105,6 +107,7 @@ class Application(Base):
     candidate_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(Enum(ApplicationStatus), default=ApplicationStatus.SCREENING, nullable=False)
     match_score = Column(Float, nullable=True)  # Percentage 0-100
+    score_breakdown = Column(JSONB, nullable=True)  # Detailed score components
     strengths = Column(JSONB, nullable=True)  # List of strengths
     weaknesses = Column(JSONB, nullable=True)  # List of weaknesses
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -152,6 +155,10 @@ class Resume(Base):
     __tablename__ = "resumes"
     id = Column(Integer, primary_key=True, index=True)
     raw_text = Column(Text, nullable=False)
+    core_domain = Column(String, nullable=True)
+    experience_months = Column(Integer, default=0)
+    gpa_score = Column(Float, default=0.0)
+    embedding = Column(Vector(384), nullable=True)
     status = Column(Enum(ResumeStatus), default=ResumeStatus.PENDING, nullable=False)
     score = Column(Integer, nullable=True)
     feedback = Column(JSONB, nullable=True)

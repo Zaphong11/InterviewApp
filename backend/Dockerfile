@@ -5,17 +5,23 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install system dependencies
-# gcc and libpq-dev are often needed for python packages like psycopg2
+# gcc, g++, and libpq-dev are needed for building Python packages like psycopg2, etc.
+# libsndfile1 and ffmpeg are critical for AI audio libraries (soundfile, vieneu, torchaudio)
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     libpq-dev \
+    libsndfile1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container at /app
 COPY requirements.txt .
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Using --extra-index-url for PyTorch CPU to avoid downloading massive 2.5GB+ CUDA binaries into the Docker image
+RUN pip install --no-cache-dir torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the backend application code
 COPY . .

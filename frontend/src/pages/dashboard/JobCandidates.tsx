@@ -16,6 +16,7 @@ interface Candidate {
     candidate_email: string;
     status: string;
     match_score: number | null;
+    score_breakdown?: any;
     strengths?: any[];
     weaknesses?: any[];
     total_score: number | null;
@@ -204,9 +205,36 @@ const JobCandidates: React.FC = () => {
                         </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-6 py-4">
-                        <div className="flex items-center gap-4 bg-muted/50 p-4 rounded-lg">
-                            <div className="text-sm font-medium text-muted-foreground w-24">Tỉ lệ phù hợp:</div>
-                            <div className="text-2xl font-bold text-primary">{selectedCandidate?.match_score?.toFixed(1)}%</div>
+                        <div className="flex flex-col gap-3 bg-muted/50 p-4 rounded-lg">
+                            <div className="flex items-center gap-4">
+                                <div className="text-sm font-medium text-muted-foreground w-24">Tỉ lệ phù hợp:</div>
+                                <div className="text-2xl font-bold text-primary">{selectedCandidate?.match_score?.toFixed(1)}%</div>
+                            </div>
+                            {selectedCandidate?.score_breakdown && (
+                                <div className="space-y-1 text-sm mt-2 pt-3 border-t border-slate-200">
+                                    <div className="font-semibold mb-2">Chi tiết điểm:</div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Ngành nghề:</span>
+                                        <span className="font-medium text-blue-600">{selectedCandidate.score_breakdown.core_domain}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Gemini Score (40%):</span>
+                                        <span className="font-medium">{selectedCandidate.score_breakdown.gemini_match_score} điểm</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Vector - MiniLM (40%):</span>
+                                        <span className="font-medium">{selectedCandidate.score_breakdown.vector_match_score} điểm</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Kinh nghiệm (10%):</span>
+                                        <span className="font-medium">{selectedCandidate.score_breakdown.exp_score} điểm</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">GPA / Học vấn (10%):</span>
+                                        <span className="font-medium">{selectedCandidate.score_breakdown.gpa_score} điểm</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div>
                             <h4 className="font-semibold text-emerald-600 mb-3 flex items-center gap-2">

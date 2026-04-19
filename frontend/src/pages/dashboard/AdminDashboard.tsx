@@ -107,6 +107,7 @@ interface Industry {
     id: number;
     name: string;
     slug: string;
+    domain?: string;
     created_at: string;
 }
 
@@ -127,6 +128,8 @@ const AdminDashboard: React.FC = () => {
     const [isIndustryDialogOpen, setIsIndustryDialogOpen] = useState(false);
     const [newIndustryName, setNewIndustryName] = useState('');
     const [newIndustrySlug, setNewIndustrySlug] = useState('');
+    const [newIndustryDomain, setNewIndustryDomain] = useState('');
+    const [editingIndustry, setEditingIndustry] = useState<Industry | null>(null);
 
     // Mock data for the chart
     const activityData = [
@@ -168,24 +171,60 @@ const AdminDashboard: React.FC = () => {
     }, []);
 
     // --- Industry Handlers ---
-    const handleCreateIndustry = async () => {
+    const handleSaveIndustry = async () => {
         if (!newIndustryName || !newIndustrySlug) {
             toast.error('Vui lòng nhập tên và slug');
             return;
         }
         try {
-            await api.post('/api/v1/industries/', {
-                name: newIndustryName,
-                slug: newIndustrySlug
-            });
-            toast.success('Thêm ngành nghề thành công');
+            if (editingIndustry) {
+                await api.put(`/api/v1/industries/${editingIndustry.id}`, {
+                    name: newIndustryName,
+                    slug: newIndustrySlug,
+                    domain: newIndustryDomain
+                });
+                toast.success('Cập nhật ngành nghề thành công');
+            } else {
+                await api.post('/api/v1/industries/', {
+                    name: newIndustryName,
+                    slug: newIndustrySlug,
+                    domain: newIndustryDomain
+                });
+                toast.success('Thêm ngành nghề thành công');
+            }
             setIsIndustryDialogOpen(false);
             setNewIndustryName('');
             setNewIndustrySlug('');
+            setNewIndustryDomain('');
+            setEditingIndustry(null);
             fetchData();
         } catch (error) {
-            console.error('Error creating industry:', error);
-            toast.error('Lỗi khi tạo ngành nghề. Slug có thể đã tồn tại.');
+            console.error('Error saving industry:', error);
+            toast.error('Lỗi khi lưu ngành nghề. Slug có thể đã tồn tại.');
+        }
+    };
+
+    const handleEditIndustryClick = (ind: Industry) => {
+        setEditingIndustry(ind);
+        setNewIndustryName(ind.name);
+        setNewIndustrySlug(ind.slug);
+        setNewIndustryDomain(ind.domain || '');
+        setIsIndustryDialogOpen(true);
+    };
+
+    const handleDeleteIndustry = async (id: number) => {
+        if (!confirm('Bạn có chắc muốn xóa ngành nghề này?')) return;
+        try {
+            await api.delete(`/api/v1/industries/${id}`);
+            toast.success('Xóa ngành nghề thành công');
+            fetchData();
+        } catch (error: any) {
+            console.error('Error deleting industry:', error);
+            if (error.response?.status === 400) {
+                toast.error('Không thể xóa. Ngành này đang được sử dụng trong các Job.');
+            } else {
+                toast.error('Lỗi khi xóa ngành nghề');
+            }
         }
     };
 
@@ -230,7 +269,6 @@ const AdminDashboard: React.FC = () => {
             setJobToDelete(null);
         }
     };
-
 
     return (
         <DashboardLayout>
@@ -495,7 +533,13 @@ const AdminDashboard: React.FC = () => {
                     <TabsContent value="industries">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-semibold">Danh mục ngành nghề</h2>
-                            <Button onClick={() => setIsIndustryDialogOpen(true)}>
+                            <Button onClick={() => {
+                                setEditingIndustry(null);
+                                setNewIndustryName('');
+                                setNewIndustrySlug('');
+                                setNewIndustryDomain('');
+                                setIsIndustryDialogOpen(true);
+                            }}>
                                 <Plus className="mr-2 h-4 w-4" /> Thêm ngành nghề
                             </Button>
                         </div>
@@ -511,17 +555,19 @@ const AdminDashboard: React.FC = () => {
                                             <TableHead>ID</TableHead>
                                             <TableHead>Tên ngành</TableHead>
                                             <TableHead>Slug</TableHead>
+                                            <TableHead>Domain Phân Vùng AI</TableHead>
                                             <TableHead>Ngày tạo</TableHead>
+                                            <TableHead className="text-right">Hành động</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {isLoading ? (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8">Đang tải...</TableCell>
+                                                <TableCell colSpan={6} className="text-center py-8">Đang tải...</TableCell>
                                             </TableRow>
                                         ) : industries.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8">Chưa có dữ liệu</TableCell>
+                                                <TableCell colSpan={6} className="text-center py-8">Chưa có dữ liệu</TableCell>
                                             </TableRow>
                                         ) : (
                                             industries.map((industry) => (
@@ -529,8 +575,26 @@ const AdminDashboard: React.FC = () => {
                                                     <TableCell className="font-medium">#{industry.id}</TableCell>
                                                     <TableCell>{industry.name}</TableCell>
                                                     <TableCell>{industry.slug}</TableCell>
+                                                    <TableCell>{industry.domain || '-'}</TableCell>
                                                     <TableCell>
                                                         {new Date(industry.created_at).toLocaleDateString('vi-VN')}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleEditIndustryClick(industry)}
+                                                        >
+                                                            Sửa
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-red-500 hover:text-red-700"
+                                                            onClick={() => handleDeleteIndustry(industry.id)}
+                                                        >
+                                                            Xóa
+                                                        </Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))
@@ -542,7 +606,7 @@ const AdminDashboard: React.FC = () => {
                     </TabsContent>
                 </Tabs>
 
-                {/* Delete User Alert Dialog */}
+                {/* Delete User Alert Dialog ... omitted rendering lines that don't need replace ... */}
                 <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
@@ -562,10 +626,7 @@ const AdminDashboard: React.FC = () => {
                 </AlertDialog>
 
                 {/* Delete Job Alert Dialog */}
-                {/* Delete Job Alert Dialog */}
-                {/* ... existing alert ... */}
                 <AlertDialog open={isJobAlertOpen} onOpenChange={setIsJobAlertOpen}>
-                    {/* ... content ... */}
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Xác nhận xóa bài viết?</AlertDialogTitle>
@@ -583,29 +644,31 @@ const AdminDashboard: React.FC = () => {
                     </AlertDialogContent>
                 </AlertDialog>
 
-                {/* Create Industry Dialog */}
+                {/* Create/Edit Industry Dialog */}
                 <Dialog open={isIndustryDialogOpen} onOpenChange={setIsIndustryDialogOpen}>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Thêm Ngành Nghề</DialogTitle>
-                            <DialogDescription>Nhập tên và slug cho ngành nghề mới.</DialogDescription>
+                            <DialogTitle>{editingIndustry ? 'Sửa Ngành Nghề' : 'Thêm Ngành Nghề'}</DialogTitle>
+                            <DialogDescription>Nhập thông tin cho ngành nghề.</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                             <div className="space-y-2">
-                                <Label htmlFor="ind-name">Tên ngành</Label>
+                                <Label htmlFor="ind-name">Tên ngành (Hiển thị người dùng)</Label>
                                 <Input
                                     id="ind-name"
                                     value={newIndustryName}
                                     onChange={(e) => {
                                         setNewIndustryName(e.target.value);
-                                        // Auto-generate slug simple version
-                                        setNewIndustrySlug(e.target.value.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, ''));
+                                        // Auto-generate slug only if crafting new
+                                        if (!editingIndustry) {
+                                            setNewIndustrySlug(e.target.value.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, ''));
+                                        }
                                     }}
                                     placeholder="VD: Công nghệ thông tin"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="ind-slug">Slug</Label>
+                                <Label htmlFor="ind-slug">Slug (URL)</Label>
                                 <Input
                                     id="ind-slug"
                                     value={newIndustrySlug}
@@ -613,10 +676,20 @@ const AdminDashboard: React.FC = () => {
                                     placeholder="cong-nghe-thong-tin"
                                 />
                             </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="ind-domain">Domain (Chuỗi phân vùng mô hình AI)</Label>
+                                <Input
+                                    id="ind-domain"
+                                    value={newIndustryDomain}
+                                    onChange={(e) => setNewIndustryDomain(e.target.value)}
+                                    placeholder="VD: IT & Software"
+                                />
+                                <p className="text-xs text-muted-foreground">Tên tiếng anh chuẩn mà AI model trả về. VD: IT & Software, Human Resources.</p>
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsIndustryDialogOpen(false)}>Hủy</Button>
-                            <Button onClick={handleCreateIndustry}>Thêm</Button>
+                            <Button onClick={handleSaveIndustry}>{editingIndustry ? 'Cập nhật' : 'Thêm'}</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
