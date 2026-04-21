@@ -113,7 +113,7 @@ const JobCandidates: React.FC = () => {
                                         </div>
 
                                         <Droppable droppableId={column.id}>
-                                            {(provided, snapshot) => (
+                                            {(provided: any, snapshot: any) => (
                                                 <div
                                                     {...provided.droppableProps}
                                                     ref={provided.innerRef}
@@ -121,7 +121,7 @@ const JobCandidates: React.FC = () => {
                                                 >
                                                     {getCandidatesByStatus(column.id).map((candidate, index) => (
                                                         <Draggable key={candidate.application_id.toString()} draggableId={candidate.application_id.toString()} index={index}>
-                                                            {(provided, snapshot) => (
+                                                            {(provided: any, snapshot: any) => (
                                                                 <div
                                                                     ref={provided.innerRef}
                                                                     {...provided.draggableProps}

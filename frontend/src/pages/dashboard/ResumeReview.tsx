@@ -59,12 +59,6 @@ const ResumeReview: React.FC = () => {
             setIsAnalyzing(false);
         }
     };
-    const getFullCvUrl = (url: string | null) => {
-        if (!url) return '';
-        if (url.startsWith('http')) return url;
-        const apiBaseUrl = api.defaults.baseURL || 'http://localhost:8000';
-        return `${apiBaseUrl.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
-    };
     if (isLoading && !resume) {
         return (
             <DashboardLayout>
